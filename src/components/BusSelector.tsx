@@ -33,44 +33,48 @@ const BusSelector: React.FC<Props> = ({
 
   return (
     <section className="bg-white rounded-xl p-6 shadow border space-y-4">
-      <label className="block text-sm font-semibold text-gray-700">
-        Select Bus
-      </label>
-      <div className="relative">
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            setSelectedBus(null);
-          }}
-          placeholder="Enter bus number..."
-          className="w-full border border-gray-300 rounded-md px-4 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-        {filtered.length > 0 && search !== selectedBus && (
-          <ul className="absolute z-10 w-full bg-white border border-gray-200 mt-1 rounded-md shadow-md max-h-48 overflow-y-auto">
-            {filtered.map((bus) => (
-              <li
-                key={bus}
-                onClick={() => {
-                  setSelectedBus(bus);
-                  setSearch(bus);
-                }}
-                className="px-4 py-2 cursor-pointer hover:bg-blue-100"
-              >
-                {bus}
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+  <label className="block text-sm font-semibold text-gray-700">
+    Select Bus
+  </label>
+  <div className="relative">
+    <input
+      type="text"
+      value={search}
+      onChange={(e) => {
+        setSearch(e.target.value);
+        setSelectedBus(null);
+      }}
+      placeholder="Search by bus number..."
+      className="w-full border border-gray-300 rounded-md px-4 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+    />
 
-      {selectedBus && (
-        <p className="text-sm text-gray-600">
-          Selected Bus: <span className="font-medium">{selectedBus}</span>
-        </p>
-      )}
-    </section>
+    {filtered.length > 0 && search !== selectedBus && (
+      <ul className="absolute z-10 w-full bg-white border border-gray-200 mt-1 rounded-md shadow-md max-h-48 overflow-y-auto">
+        {filtered.map((bus) => (
+          <li
+            key={bus}
+            onClick={() => {
+              setSelectedBus(bus);
+              setSearch(bus); // fill input
+            }}
+            className="px-4 py-2 cursor-pointer hover:bg-blue-100 text-sm"
+          >
+            {bus}
+          </li>
+        ))}
+      </ul>
+    )}
+  </div>
+
+  {selectedBus ? (
+    <p className="text-sm text-gray-600">
+      Selected: <span className="font-medium">{selectedBus}</span>
+    </p>
+  ) : (
+    <p className="text-sm text-gray-400 italic">No bus selected</p>
+  )}
+</section>
+
   );
 };
 
