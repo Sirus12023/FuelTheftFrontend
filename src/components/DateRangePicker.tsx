@@ -81,8 +81,10 @@ const DateRangePicker: React.FC<Props> = ({
                   setShowStartPicker(false);
                 }}
                 captionLayout="dropdown"
-                fromDate={new Date(2020, 0, 1)}
-                toDate={new Date(new Date().getFullYear() + 1, 11, 31)}
+                hidden={{
+                  before: new Date(2020, 0, 1),
+                  after: new Date(new Date().getFullYear() + 1, 11, 31),
+                }}
                 className="border rounded-md p-2"
               />
             ) : (
@@ -118,7 +120,7 @@ const DateRangePicker: React.FC<Props> = ({
             ) : (
               <>
                 <p className="text-sm text-gray-700 mt-2">
-                  Selected: <span className="font-semibold">{endDate ? format(endDate, "PPP") : "Not selected"}</span>
+                  Selected: <span className="font-semibold">{endDate !== undefined ? format(endDate, "PPP") : "Not selected"}</span>
                 </p>
                 <button
                   className="text-sm text-blue-600 underline mt-1"
