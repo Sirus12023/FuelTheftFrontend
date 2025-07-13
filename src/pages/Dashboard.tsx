@@ -67,7 +67,7 @@ const Dashboard: React.FC = () => {
     <div className="space-y-10 px-6 py-8 max-w-7xl mx-auto">
       {/* Intro Section */}
       <section className="bg-white rounded-2xl p-6 shadow border border-blue-100">
-        <h1 className="text-3xl font-bold text-gray-800 mb-2">Welcome to PetroTrack SSD</h1>
+        <h1 className="text-3xl font-bold text-gray-800 mb-2">Welcome to Fuel Theft Monitoring!</h1>
         <p className="text-gray-600 text-sm leading-relaxed">
           This dashboard provides a real-time overview of fuel usage and alerts across your fleet.
           Monitor fuel levels, detect theft, and analyze refueling events.
