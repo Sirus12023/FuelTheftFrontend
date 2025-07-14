@@ -8,7 +8,8 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import BusStatusCard from "../components/BusStatusCard";
+import MonitoredBusCard from "../components/MonitoredBusCard";
+
 
 const Dashboard: React.FC = () => {
   const stats = [
@@ -93,35 +94,53 @@ const Dashboard: React.FC = () => {
         ))}
       </div>
 
-      {/* Status Legend */}
-      <div className="flex gap-6 text-sm text-gray-600 mb-2">
-        <div className="flex items-center gap-2">
-          <span className="w-3 h-3 bg-green-500 rounded-full" /> Normal
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="w-3 h-3 bg-red-500 rounded-full" /> Alert
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="w-3 h-3 bg-gray-400 rounded-full" /> Offline
-        </div>
-      </div>
 
-      {/* Bus Cards */}
-      <div>
-        <h3 className="text-2xl font-semibold mb-4 text-gray-700">🚌 Monitored Buses</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
-          {buses.map((bus) => (
-            <BusStatusCard
-              key={bus.id}
-              id={bus.id}
-              route={bus.route}
-              fuelLevel={bus.fuelLevel}
-              status={bus.status as "normal" | "alert" | "offline"}
-              selected={selectedBus === bus.id}
-            />
-          ))}
-        </div>
-      </div>
+     {/* Bus Overview Cards */}
+<div>
+  <h3 className="text-2xl font-semibold mb-4 text-gray-700">🚌 Monitored Buses</h3>
+  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+    {[
+      {
+        imageUrl: "/bus1.jpg",
+        regNumber: "UP32AB1234",
+        driver: "Ravi Kumar",
+        route: "Route 1",
+        busId: "Bus1001",
+      },
+      {
+        imageUrl: "/bus2.jpg",
+        regNumber: "MH12CD5678",
+        driver: "Sunita Sharma",
+        route: "Route 2",
+        busId: "Bus1002",
+      },
+      {
+        imageUrl: "/bus3.jpg",
+        regNumber: "DL8CAF9876",
+        driver: "Amit Verma",
+        route: "Route 3",
+        busId: "Bus1003",
+      },
+      {
+        imageUrl: "/bus4.jpg",
+        regNumber: "RJ14XY6543",
+        driver: "Pooja Singh",
+        route: "Route 4",
+        busId: "Bus1004",
+      },
+      {
+        imageUrl: "/bus5.jpg",
+        regNumber: "KA03MN1122",
+        driver: "Rajesh Meena",
+        route: "Route 5",
+        busId: "Bus1005",
+      },
+    ].map((bus, idx) => (
+      <MonitoredBusCard key={idx} {...bus} />
+    ))}
+  </div>
+</div>
+
 
       {!selectedBus && (
         <div className="mt-10 text-gray-500 text-sm italic">
