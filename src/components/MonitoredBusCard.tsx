@@ -24,7 +24,14 @@ const MonitoredBusCard: React.FC<MonitoredBusCardProps> = ({
   const navigate = useNavigate();
 
   const handleClick = () => {
-    navigate(`/fuel-theft?bus=${busId}`);
+    const params = new URLSearchParams({
+    bus: busId,
+    regNumber,
+    driver,
+    route,
+    imageUrl,
+  });
+    navigate(`/fuel-theft?${params.toString()}`);
   };
 
   const badgeColor =

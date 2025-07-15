@@ -9,13 +9,14 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import MonitoredBusCard from "../components/MonitoredBusCard";
+import bus1 from "../assets/bus1.jpg";
 
 
 const Dashboard: React.FC = () => {
   const stats = [
     {
       title: "Total Buses",
-      value: 125,
+      value: 5,
       icon: "🚌",
       color: "from-blue-500 to-blue-700",
     },
@@ -33,7 +34,7 @@ const Dashboard: React.FC = () => {
     },
     {
       title: "Refueling Events",
-      value: 8,
+      value: 3,
       icon: "⛽",
       color: "from-green-500 to-green-700",
     },
@@ -66,14 +67,45 @@ const Dashboard: React.FC = () => {
 
   return (
     <div className="space-y-10 px-6 py-8 max-w-7xl mx-auto">
-      {/* Intro Section */}
-      <section className="bg-white rounded-2xl p-6 shadow border border-blue-100">
-        <h1 className="text-3xl font-bold text-gray-800 mb-2">Welcome to Fuel Theft Monitoring!</h1>
-        <p className="text-gray-600 text-sm leading-relaxed">
-          This dashboard provides a real-time overview of fuel usage and alerts across your fleet.
-          Monitor fuel levels, detect theft, and analyze refueling events.
-        </p>
-      </section>
+   {/* Intro Section with Styling */}
+<section className="relative overflow-hidden bg-gradient-to-br from-blue-50 to-white rounded-2xl p-8 shadow border border-blue-100">
+  <div className="absolute inset-y-0 right-0 w-32 opacity-10 pointer-events-none">
+    <img
+      src="/bus1.jpg"
+      alt="Bus Illustration"
+      className="h-full w-full object-cover rounded-r-2xl"
+    />
+  </div>
+
+  <div className="relative z-10 space-y-3">
+    <h1 className="text-4xl font-extrabold text-blue-900 flex items-center gap-2">
+      🛡️ FuelSafe Dashboard
+    </h1>
+
+    <p className="text-gray-700 text-base leading-relaxed max-w-2xl">
+      Welcome to <span className="font-semibold text-blue-600">FuelSafe</span> — your centralized platform
+      to monitor fuel usage, detect theft, and track refueling activities across your fleet in real-time.
+    </p>
+
+    <div className="flex flex-wrap gap-4 mt-4">
+      <span className="bg-blue-100 text-blue-700 text-sm font-medium px-3 py-1 rounded-full">
+        🔍 Real-time Monitoring
+      </span>
+      <span className="bg-yellow-100 text-yellow-800 text-sm font-medium px-3 py-1 rounded-full">
+        ⚠️ Anomaly Detection
+      </span>
+      <span className="bg-green-100 text-green-800 text-sm font-medium px-3 py-1 rounded-full">
+        ✅ 5 Buses Under Observation
+      </span>
+    </div>
+
+    <p className="mt-4 text-sm text-gray-600 max-w-lg">
+      We're currently in the testing phase with 5 buses actively monitored.
+      Our system continuously analyzes fuel consumption and sensor status to ensure data integrity.
+      Scaling to full fleet support is planned in the next deployment.
+    </p>
+  </div>
+</section>
 
       {/* Overview Heading */}
       <h2 className="text-2xl font-bold text-gray-800">📊 Dashboard Overview</h2>
@@ -101,35 +133,36 @@ const Dashboard: React.FC = () => {
   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
     {[
       {
-        imageUrl: "/bus1.jpg",
+        imageUrl: bus1,
         regNumber: "UP32AB1234",
         driver: "Ravi Kumar",
         route: "Route 1",
         busId: "Bus1001",
+        
       },
       {
-        imageUrl: "/bus2.jpg",
+        imageUrl: bus1,
         regNumber: "MH12CD5678",
         driver: "Sunita Sharma",
         route: "Route 2",
         busId: "Bus1002",
       },
       {
-        imageUrl: "/bus3.jpg",
+        imageUrl: bus1,
         regNumber: "DL8CAF9876",
         driver: "Amit Verma",
         route: "Route 3",
         busId: "Bus1003",
       },
       {
-        imageUrl: "/bus4.jpg",
+        imageUrl: bus1,
         regNumber: "RJ14XY6543",
         driver: "Pooja Singh",
         route: "Route 4",
         busId: "Bus1004",
       },
       {
-        imageUrl: "/bus5.jpg",
+        imageUrl: bus1,
         regNumber: "KA03MN1122",
         driver: "Rajesh Meena",
         route: "Route 5",

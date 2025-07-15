@@ -11,6 +11,7 @@ import {
   Scatter,
 } from "recharts";
 import { format, subMinutes } from "date-fns";
+import { markFuelEvents } from "../utils/markFuelEvents";
 
 const base = new Date();
 
@@ -38,12 +39,14 @@ const mockFuelData = [
   { time: base.getTime(), fuelLevel: 74, event: null },
 ];
 
+const markedData = markFuelEvents(mockFuelData); // ✅ Now mockFuelData is already defined
+
 const FuelChart: React.FC = () => {
   return (
     <section className="bg-white rounded-xl shadow p-6 mt-10">
       <h3 className="text-xl font-semibold text-gray-800 mb-4">📈 Fuel Level Graph</h3>
       <ResponsiveContainer width="100%" height={300}>
-        <LineChart data={mockFuelData}>
+        <LineChart data={markedData}>
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis
             dataKey="time"
@@ -59,23 +62,22 @@ const FuelChart: React.FC = () => {
             dataKey="fuelLevel"
             stroke="#3b82f6"
             strokeWidth={2}
-            dot={false}
+            dot={({ cx, cy, payload }) => {
+              if (payload.eventType === "refuel") {
+                return (
+                  <circle cx={cx} cy={cy} r={5} fill="green" stroke="white" strokeWidth={1} />
+                );
+              } else if (payload.eventType === "theft") {
+                return (
+                  <circle cx={cx} cy={cy} r={5} fill="red" stroke="white" strokeWidth={1} />
+                );
+              }
+              return <circle cx={cx} cy={cy} r={0} fill="transparent" />;
+            }}
           />
-          <Scatter
-            data={mockFuelData.filter((d) => d.event === "Theft")}
-            fill="#ef4444"
-            shape="triangle"
-          />
-          <Scatter
-            data={mockFuelData.filter((d) => d.event === "Refuel")}
-            fill="#10b981"
-            shape="square"
-          />
-          <Scatter
-            data={mockFuelData.filter((d) => d.event === "Drop")}
-            fill="#f59e0b"
-            shape="circle"
-          />
+          <Scatter data={mockFuelData.filter((d) => d.event === "Theft")} fill="#ef4444" shape="triangle" />
+          <Scatter data={mockFuelData.filter((d) => d.event === "Refuel")} fill="#10b981" shape="square" />
+          <Scatter data={mockFuelData.filter((d) => d.event === "Drop")} fill="#f59e0b" shape="circle" />
         </LineChart>
       </ResponsiveContainer>
 
