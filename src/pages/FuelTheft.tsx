@@ -1,15 +1,13 @@
-// FuelTheft.tsx
 import React, { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import BusTimeFilter from "../components/BusTimeFilter";
 import FuelChart from "../components/FuelChart";
 import bus1 from "../assets/bus1.jpg";
 
-
 const busDetails = [
   {
     busId: "Bus1001",
-    imageUrl: bus1, 
+    imageUrl: bus1,
     regNumber: "UP32AB1234",
     driver: "Ravi Kumar",
     route: "Route 1",
@@ -20,7 +18,7 @@ const busDetails = [
     busId: "Bus1002",
     imageUrl: bus1,
     regNumber: "MH12CD5678",
-    driver: "Sunita Sharma",
+    driver: "Sumit Sharma",
     route: "Route 2",
     fuelLevel: 83,
     sensorStatus: "Offline",
@@ -38,7 +36,7 @@ const busDetails = [
     busId: "Bus1004",
     imageUrl: bus1,
     regNumber: "RJ14XY6543",
-    driver: "Pooja Singh",
+    driver: "Pawan Singh",
     route: "Route 4",
     fuelLevel: 28,
     sensorStatus: "Online",
@@ -69,7 +67,7 @@ const FuelTheft: React.FC = () => {
   const [showStartPicker, setShowStartPicker] = useState(true);
   const [showEndPicker, setShowEndPicker] = useState(true);
 
-  const selectedBus = busDetails.find(bus => bus.busId === selectedBusId);
+  const selectedBus = busDetails.find((bus) => bus.busId === selectedBusId);
 
   useEffect(() => {
     const param = new URLSearchParams(location.search).get("bus");
@@ -80,50 +78,83 @@ const FuelTheft: React.FC = () => {
   }, [location.search]);
 
   return (
-    <div className="px-6 py-8 max-w-5xl mx-auto space-y-10">
-      <h2 className="text-3xl font-bold text-gray-800">🚨 Fuel Theft Monitoring</h2>
+    <div className="px-6 py-12 max-w-6xl mx-auto space-y-10 font-sans">
+      {/* Header */}
+      <div className="text-center space-y-2">
+        <h2 className="text-4xl sm:text-5xl font-extrabold text-blue-900">
+          🚨 Fuel Theft Monitoring
+        </h2>
+        <p className="text-gray-600 text-lg">
+          Monitor your fleet’s fuel activity with real-time detection & analysis
+        </p>
+      </div>
 
-      <BusTimeFilter
-        busSearch={search}
-        setBusSearch={setSearch}
-        selectedBusId={selectedBusId}
-        setSelectedBusId={setSelectedBusId}
-        timeRange={timeRange}
-        setTimeRange={setTimeRange}
-        showCustom={showCustom}
-        setShowCustom={setShowCustom}
-        startDate={startDate}
-        setStartDate={setStartDate}
-        endDate={endDate}
-        setEndDate={setEndDate}
-        showStartPicker={showStartPicker}
-        setShowStartPicker={setShowStartPicker}
-        showEndPicker={showEndPicker}
-        setShowEndPicker={setShowEndPicker}
-      />
+      {/* Filter */}
+      <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
+        <BusTimeFilter
+          busSearch={search}
+          setBusSearch={setSearch}
+          selectedBusId={selectedBusId}
+          setSelectedBusId={setSelectedBusId}
+          timeRange={timeRange}
+          setTimeRange={setTimeRange}
+          showCustom={showCustom}
+          setShowCustom={setShowCustom}
+          startDate={startDate}
+          setStartDate={setStartDate}
+          endDate={endDate}
+          setEndDate={setEndDate}
+          showStartPicker={showStartPicker}
+          setShowStartPicker={setShowStartPicker}
+          showEndPicker={showEndPicker}
+          setShowEndPicker={setShowEndPicker}
+        />
+      </div>
 
+      {/* No Bus Selected */}
+      {!selectedBus && (
+        <div className="bg-gradient-to-br from-white to-blue-50 border rounded-xl shadow-md text-center py-24 px-4 text-gray-600 animate-fade-in">
+          <div className="mb-4">
+            <svg className="h-16 w-16 text-blue-300 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.75 9.75h4.5M9.75 12.75h4.5M3.75 6h16.5M3.75 18h16.5M4.5 4.5v15M19.5 4.5v15" />
+            </svg>
+          </div>
+          <h3 className="text-2xl font-semibold text-gray-700 mb-2">No Bus Selected</h3>
+          <p className="max-w-md mx-auto text-base text-gray-600">
+            Please select a <span className="font-semibold text-blue-600">bus number</span> and
+            <span className="font-semibold text-blue-600"> time range</span> to view its analytics and events.
+          </p>
+        </div>
+      )}
+
+      {/* Bus Details */}
       {selectedBus && (
-        <div className="bg-white p-6 rounded-xl shadow border space-y-4">
+        <div className="bg-gradient-to-br from-white via-blue-50 to-white p-6 rounded-xl shadow-xl border border-blue-100 transition-all duration-300">
           <div className="flex items-center gap-6">
             <img
               src={selectedBus.imageUrl}
               alt="Bus"
-              className="w-32 h-32 rounded-lg object-cover border"
+              className="w-32 h-32 rounded-xl object-cover border shadow"
             />
-            <div className="space-y-1">
-              <p className="text-lg font-semibold text-gray-800">{selectedBus.regNumber}</p>
-              <p className="text-gray-600">Driver: {selectedBus.driver}</p>
-              <p className="text-gray-600">Route: {selectedBus.route}</p>
-              <p className="text-gray-600">Fuel Level: {selectedBus.fuelLevel}L</p>
-              <span className={`inline-block text-xs font-medium px-2 py-1 rounded 
-                ${selectedBus.sensorStatus === "Online" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
-                Sensor: {selectedBus.sensorStatus}
+            <div className="space-y-2">
+              <h3 className="text-xl font-bold text-blue-900">
+                {selectedBus.regNumber}
+              </h3>
+              <p className="text-gray-700">👤 Driver: {selectedBus.driver}</p>
+              <p className="text-gray-700">🛣️ Route: {selectedBus.route}</p>
+              <p className="text-gray-700">⛽ Fuel Level: {selectedBus.fuelLevel} L</p>
+              <span className={`inline-block px-3 py-1 text-xs font-medium rounded-full 
+                ${selectedBus.sensorStatus === "Online"
+                  ? "bg-green-100 text-green-700"
+                  : "bg-red-100 text-red-700"}`}>
+                🔧 Sensor: {selectedBus.sensorStatus}
               </span>
             </div>
           </div>
         </div>
       )}
 
+      {/* Chart */}
       {selectedBus && <FuelChart />}
     </div>
   );

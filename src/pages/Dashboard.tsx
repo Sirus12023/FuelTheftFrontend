@@ -69,46 +69,47 @@ const Dashboard: React.FC = () => {
     <div className="space-y-10 px-6 py-8 max-w-7xl mx-auto">
    {/* Intro Section with Styling */}
 <section className="relative overflow-hidden bg-gradient-to-br from-blue-50 to-white rounded-2xl p-8 shadow border border-blue-100">
-  <div className="absolute inset-y-0 right-0 w-32 opacity-10 pointer-events-none">
+  <div className="absolute inset-0 w-full h-full object-contain opacity-20 pointer-events-none">
     <img
-      src="/bus1.jpg"
+      src= {bus1}
       alt="Bus Illustration"
       className="h-full w-full object-cover rounded-r-2xl"
     />
   </div>
 
-  <div className="relative z-10 space-y-3">
-    <h1 className="text-4xl font-extrabold text-blue-900 flex items-center gap-2">
-      🛡️ FuelSafe Dashboard
-    </h1>
+ <div className="relative z-10 text-center py-12 px-6 bg-gradient-to-br from-white via-blue-50 to-white rounded-2xl shadow-lg max-w-4xl mx-auto space-y-6">
+  <h1 className="text-5xl md:text-6xl font-extrabold text-blue-900 leading-tight tracking-tight">
+    🛡️ FuelSafe
+  </h1>
 
-    <p className="text-gray-700 text-base leading-relaxed max-w-2xl">
-      Welcome to <span className="font-semibold text-blue-600">FuelSafe</span> — your centralized platform
-      to monitor fuel usage, detect theft, and track refueling activities across your fleet in real-time.
-    </p>
+  <p className="text-lg md:text-xl text-gray-700 leading-relaxed font-medium max-w-2xl mx-auto">
+    Welcome to <span className="font-semibold text-blue-600">FuelSafe</span> — your centralized platform
+    to monitor fuel usage, detect theft, and track refueling activities across your fleet in real time.
+  </p>
 
-    <div className="flex flex-wrap gap-4 mt-4">
-      <span className="bg-blue-100 text-blue-700 text-sm font-medium px-3 py-1 rounded-full">
-        🔍 Real-time Monitoring
-      </span>
-      <span className="bg-yellow-100 text-yellow-800 text-sm font-medium px-3 py-1 rounded-full">
-        ⚠️ Anomaly Detection
-      </span>
-      <span className="bg-green-100 text-green-800 text-sm font-medium px-3 py-1 rounded-full">
-        ✅ 5 Buses Under Observation
-      </span>
-    </div>
-
-    <p className="mt-4 text-sm text-gray-600 max-w-lg">
-      We're currently in the testing phase with 5 buses actively monitored.
-      Our system continuously analyzes fuel consumption and sensor status to ensure data integrity.
-      Scaling to full fleet support is planned in the next deployment.
-    </p>
+  <div className="flex flex-wrap justify-center gap-3 mt-6">
+    <span className="bg-blue-100 text-blue-800 text-sm md:text-base font-medium px-4 py-2 rounded-full shadow-sm">
+      🔍 Real-time Monitoring
+    </span>
+    <span className="bg-yellow-100 text-yellow-800 text-sm md:text-base font-medium px-4 py-2 rounded-full shadow-sm">
+      ⚠️ Anomaly Detection
+    </span>
+    <span className="bg-green-100 text-green-800 text-sm md:text-base font-medium px-4 py-2 rounded-full shadow-sm">
+      ✅ 5 Buses Under Observation
+    </span>
   </div>
+
+  <p className="text-sm md:text-base text-gray-600 max-w-2xl mx-auto mt-4 leading-relaxed">
+    We're currently in the testing phase with 5 buses actively monitored. Our system continuously analyzes
+    fuel consumption and sensor status to ensure data integrity. Scaling to full fleet support is planned
+    in the next deployment.
+  </p>
+</div>
+
 </section>
 
       {/* Overview Heading */}
-      <h2 className="text-2xl font-bold text-gray-800">📊 Dashboard Overview</h2>
+     {/* <h2 className="text-2xl font-bold text-gray-800">📊 Dashboard Overview</h2> */}
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -143,7 +144,7 @@ const Dashboard: React.FC = () => {
       {
         imageUrl: bus1,
         regNumber: "MH12CD5678",
-        driver: "Sunita Sharma",
+        driver: "Sumit Sharma",
         route: "Route 2",
         busId: "Bus1002",
       },
@@ -157,7 +158,7 @@ const Dashboard: React.FC = () => {
       {
         imageUrl: bus1,
         regNumber: "RJ14XY6543",
-        driver: "Pooja Singh",
+        driver: "Pawan Singh",
         route: "Route 4",
         busId: "Bus1004",
       },
