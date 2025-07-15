@@ -1,34 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { format } from "date-fns";
+import axios from "axios";
 
-// 🔧 Mock alert data
-const mockAlerts = [
-  {
-    busNumber: "Bus 1001",
-    eventType: "Theft",
-    timestamp: new Date(),
-    location: { lat: 28.61, lng: 77.23 },
-    fuelChange: -12.5,
-    severity: "High",
-  },
-  {
-    busNumber: "Bus 1004",
-    eventType: "Refuel",
-    timestamp: new Date(),
-    location: { lat: 28.62, lng: 77.2 },
-    fuelChange: 18,
-    severity: "Low",
-  },
-  {
-    busNumber: "Bus 1020",
-    eventType: "Drop",
-    timestamp: new Date(),
-    location: { lat: 28.59, lng: 77.25 },
-    fuelChange: -4.2,
-    severity: "Medium",
-  },
-];
-
+// 🔴 Severity Color Utility
 const getSeverityColor = (severity: string) => {
   switch (severity) {
     case "High":
@@ -43,21 +17,38 @@ const getSeverityColor = (severity: string) => {
 };
 
 const BusEvents: React.FC = () => {
+  const [alerts, setAlerts] = useState<any[]>([]);
   const [busFilter, setBusFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [debouncedBusFilter, setDebouncedBusFilter] = useState(busFilter);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
 
+  // Debounce search input
   useEffect(() => {
     const handler = setTimeout(() => setDebouncedBusFilter(busFilter), 300);
     return () => clearTimeout(handler);
   }, [busFilter]);
 
-  const filteredAlerts = mockAlerts.filter((alert) => {
+  // 🔄 Fetch alerts from backend
+  useEffect(() => {
+    const fetchAlerts = async () => {
+      try {
+        const res = await axios.get("/alerts/all");
+        setAlerts(res.data);
+      } catch (err) {
+        console.error("Failed to fetch alerts:", err);
+      }
+    };
+
+    fetchAlerts();
+  }, []);
+
+  // 🔍 Apply Filters
+  const filteredAlerts = alerts.filter((alert) => {
     return (
-      (debouncedBusFilter === "" || alert.busNumber.includes(debouncedBusFilter)) &&
-      (typeFilter === "" || alert.eventType === typeFilter)
+      (debouncedBusFilter === "" || alert.busId.includes(debouncedBusFilter)) &&
+      (typeFilter === "" || alert.type === typeFilter)
     );
   });
 
@@ -75,7 +66,7 @@ const BusEvents: React.FC = () => {
       <div className="flex flex-wrap gap-4 items-center">
         <input
           type="text"
-          placeholder="Filter by Bus Number"
+          placeholder="Filter by Bus ID"
           value={busFilter}
           onChange={(e) => {
             setBusFilter(e.target.value);
@@ -98,19 +89,22 @@ const BusEvents: React.FC = () => {
         </select>
       </div>
 
-      {/* Total Count */}
+      {/* Count */}
       <p className="text-sm text-gray-500">
         Showing {filteredAlerts.length} alert{filteredAlerts.length !== 1 ? "s" : ""}
       </p>
 
+      {/* Table */}
       <div className="overflow-x-auto rounded-xl border shadow-sm bg-white">
         {filteredAlerts.length === 0 ? (
-          <div className="p-6 text-center text-gray-500">No alerts found for the selected filters.</div>
+          <div className="p-6 text-center text-gray-500">
+            No alerts found for the selected filters.
+          </div>
         ) : (
           <table className="min-w-full table-auto text-sm">
             <thead className="bg-gray-100 text-gray-700 text-left">
               <tr>
-                <th className="px-6 py-3">Bus Number</th>
+                <th className="px-6 py-3">Bus ID</th>
                 <th className="px-6 py-3">Event Type</th>
                 <th className="px-6 py-3">Timestamp</th>
                 <th className="px-6 py-3">Location</th>
@@ -121,15 +115,20 @@ const BusEvents: React.FC = () => {
             <tbody>
               {paginatedAlerts.map((alert, idx) => (
                 <tr key={idx} className="border-t hover:bg-gray-50">
-                  <td className="px-6 py-4 font-medium">{alert.busNumber}</td>
-                  <td className="px-6 py-4">{alert.eventType}</td>
-                  <td className="px-6 py-4">{format(alert.timestamp, "PPpp")}</td>
+                  <td className="px-6 py-4 font-medium">{alert.busId}</td>
+                  <td className="px-6 py-4">{alert.type}</td>
                   <td className="px-6 py-4">
-                    ({alert.location.lat.toFixed(2)}, {alert.location.lng.toFixed(2)})
+                    {format(new Date(alert.timestamp), "PPpp")}
                   </td>
                   <td className="px-6 py-4">
-                    {alert.fuelChange > 0 ? "+" : ""}
-                    {alert.fuelChange} L
+                    {alert.location
+                      ? `(${alert.location.lat.toFixed(2)}, ${alert.location.lng.toFixed(2)})`
+                      : "N/A"}
+                  </td>
+                  <td className="px-6 py-4">
+                    {alert.fuelChange != null
+                      ? `${alert.fuelChange > 0 ? "+" : ""}${alert.fuelChange} L`
+                      : "—"}
                   </td>
                   <td className="px-6 py-4">
                     <span
@@ -147,7 +146,7 @@ const BusEvents: React.FC = () => {
         )}
       </div>
 
-      {/* Pagination Controls */}
+      {/* Pagination */}
       {pageCount > 1 && (
         <div className="flex justify-center mt-4 space-x-2">
           {Array.from({ length: pageCount }, (_, i) => (

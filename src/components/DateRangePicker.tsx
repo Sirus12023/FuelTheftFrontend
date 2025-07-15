@@ -68,8 +68,10 @@ const DateRangePicker: React.FC<Props> = ({
         ))}
       </select>
 
+      {/* 📅 Custom Date Pickers */}
       {showCustom && (
         <div className="flex flex-wrap gap-6 pt-4">
+          {/* Start Date Picker */}
           <div>
             <label className="text-sm font-medium">Start Date</label>
             {showStartPicker ? (
@@ -81,16 +83,17 @@ const DateRangePicker: React.FC<Props> = ({
                   setShowStartPicker(false);
                 }}
                 captionLayout="dropdown"
-                hidden={{
-                  before: new Date(2020, 0, 1),
-                  after: new Date(new Date().getFullYear() + 1, 11, 31),
-                }}
+                fromDate={new Date(2020, 0, 1)}
+                toDate={new Date(new Date().getFullYear() + 1, 11, 31)}
                 className="border rounded-md p-2"
               />
             ) : (
               <>
                 <p className="text-sm text-gray-700 mt-2">
-                  Selected: <span className="font-semibold">{startDate ? format(startDate, "PPP") : "Not selected"}</span>
+                  Selected:{" "}
+                  <span className="font-semibold">
+                    {startDate ? format(startDate, "PPP") : "Not selected"}
+                  </span>
                 </p>
                 <button
                   className="text-sm text-blue-600 underline mt-1"
@@ -102,6 +105,7 @@ const DateRangePicker: React.FC<Props> = ({
             )}
           </div>
 
+          {/* End Date Picker */}
           <div>
             <label className="text-sm font-medium">End Date</label>
             {showEndPicker ? (
@@ -120,7 +124,10 @@ const DateRangePicker: React.FC<Props> = ({
             ) : (
               <>
                 <p className="text-sm text-gray-700 mt-2">
-                  Selected: <span className="font-semibold">{endDate !== undefined ? format(endDate, "PPP") : "Not selected"}</span>
+                  Selected:{" "}
+                  <span className="font-semibold">
+                    {endDate ? format(endDate, "PPP") : "Not selected"}
+                  </span>
                 </p>
                 <button
                   className="text-sm text-blue-600 underline mt-1"

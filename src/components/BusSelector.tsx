@@ -1,16 +1,7 @@
 // components/BusSelector.tsx
-import React from "react";
+import React, { useEffect, useState } from "react";
+import axios from "axios";
 import { BsFillBusFrontFill } from "react-icons/bs";
-
-const mockBuses = [
-  "Bus 1001",
-  "Bus 1002",
-  "Bus 1003",
-  "Bus 1004",
-  "Bus 1005",
-  "Bus 1020",
-  "Bus 1055",
-];
 
 interface Props {
   search: string;
@@ -25,58 +16,73 @@ const BusSelector: React.FC<Props> = ({
   selectedBus,
   setSelectedBus,
 }) => {
+  const [busList, setBusList] = useState<string[]>([]);
+
+  useEffect(() => {
+    const fetchBuses = async () => {
+      try {
+        const res = await axios.get("/dashboard");
+        const buses = res.data?.topBuses || [];
+        const busIds = buses.map((bus: any) => bus.busId);
+        setBusList(busIds);
+      } catch (err) {
+        console.error("Error fetching buses:", err);
+      }
+    };
+
+    fetchBuses();
+  }, []);
+
   const filtered =
     search.length === 0
       ? []
-      : mockBuses.filter((bus) =>
+      : busList.filter((bus) =>
           bus.toLowerCase().includes(search.toLowerCase())
         );
 
   return (
-    
     <section className="bg-white rounded-xl p-6 shadow border space-y-4">
-  <label className="block text-sm font-semibold text-gray-700">
-    Select Bus
-  </label>
-  <div className="relative">
-    <input
-      type="text"
-      value={search}
-      onChange={(e) => {
-        setSearch(e.target.value);
-        setSelectedBus(null);
-      }}
-      placeholder="Search by bus number..."
-      className="w-full border border-gray-300 rounded-md px-4 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-    />
+      <label className="block text-sm font-semibold text-gray-700">
+        Select Bus
+      </label>
+      <div className="relative">
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setSelectedBus(null);
+          }}
+          placeholder="Search by bus ID..."
+          className="w-full border border-gray-300 rounded-md px-4 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
 
-    {filtered.length > 0 && search !== selectedBus && (
-      <ul className="absolute z-10 w-full bg-white border border-gray-200 mt-1 rounded-md shadow-md max-h-48 overflow-y-auto">
-        {filtered.map((bus) => (
-          <li
-            key={bus}
-            onClick={() => {
-              setSelectedBus(bus);
-              setSearch(bus); // fill input
-            }}
-            className="px-4 py-2 cursor-pointer hover:bg-blue-100 text-sm"
-          >
-            {bus}
-          </li>
-        ))}
-      </ul>
-    )}
-  </div>
+        {filtered.length > 0 && search !== selectedBus && (
+          <ul className="absolute z-10 w-full bg-white border border-gray-200 mt-1 rounded-md shadow-md max-h-48 overflow-y-auto">
+            {filtered.map((bus) => (
+              <li
+                key={bus}
+                onClick={() => {
+                  setSelectedBus(bus);
+                  setSearch(bus);
+                }}
+                className="px-4 py-2 cursor-pointer hover:bg-blue-100 text-sm"
+              >
+                {bus}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
 
-  {selectedBus ? (
-    <p className="text-sm text-gray-600">
-      Selected: <span className="font-medium">{selectedBus}</span>
-    </p>
-  ) : (
-    <p className="text-sm text-gray-400 italic">No bus selected</p>
-  )}
-</section>
-
+      {selectedBus ? (
+        <p className="text-sm text-gray-600">
+          Selected: <span className="font-medium">{selectedBus}</span>
+        </p>
+      ) : (
+        <p className="text-sm text-gray-400 italic">No bus selected</p>
+      )}
+    </section>
   );
 };
 

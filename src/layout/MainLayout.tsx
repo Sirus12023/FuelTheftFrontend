@@ -1,12 +1,19 @@
-// layout/MainLayout.tsx
+// src/layout/MainLayout.tsx
 import React from "react";
 import Sidebar from "../components/Sidebar";
 
-const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+interface MainLayoutProps {
+  children: React.ReactNode;
+}
+
+const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   return (
-    <div className="flex">
+    <div className="flex h-screen overflow-hidden bg-gray-50">
+      {/* Sidebar */}
       <Sidebar />
-      <main className="flex-1 ml-16 md:ml-56 p-6 transition-all duration-300">
+
+      {/* Main Content */}
+      <main className="flex-1 overflow-y-auto transition-all ml-16 md:ml-56 p-6">
         {children}
       </main>
     </div>

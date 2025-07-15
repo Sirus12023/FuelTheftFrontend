@@ -10,40 +10,34 @@ import {
   CartesianGrid,
   Scatter,
 } from "recharts";
-import { format, subMinutes } from "date-fns";
+import { format } from "date-fns";
 
-const base = new Date();
+interface FuelChartProps {
+  fuelData: {
+    timestamp: string;
+    fuelLevel: number;
+    eventType?: "Refuel" | "Theft" | "Drop" | "Normal";
+    description?: string;
+  }[];
+  events: FuelChartProps["fuelData"];
+  busId: string;
+}
 
-const mockFuelData = [
-  { time: subMinutes(base, 600).getTime(), fuelLevel: 95, event: null },
-  { time: subMinutes(base, 570).getTime(), fuelLevel: 94, event: null },
-  { time: subMinutes(base, 540).getTime(), fuelLevel: 91, event: "Drop" },
-  { time: subMinutes(base, 510).getTime(), fuelLevel: 90, event: null },
-  { time: subMinutes(base, 480).getTime(), fuelLevel: 89, event: null },
-  { time: subMinutes(base, 450).getTime(), fuelLevel: 88, event: "Drop" },
-  { time: subMinutes(base, 420).getTime(), fuelLevel: 86, event: null },
-  { time: subMinutes(base, 390).getTime(), fuelLevel: 72, event: "Theft" },
-  { time: subMinutes(base, 360).getTime(), fuelLevel: 70, event: null },
-  { time: subMinutes(base, 330).getTime(), fuelLevel: 68, event: "Drop" },
-  { time: subMinutes(base, 300).getTime(), fuelLevel: 92, event: "Refuel" },
-  { time: subMinutes(base, 270).getTime(), fuelLevel: 90, event: null },
-  { time: subMinutes(base, 240).getTime(), fuelLevel: 89, event: null },
-  { time: subMinutes(base, 210).getTime(), fuelLevel: 85, event: "Drop" },
-  { time: subMinutes(base, 180).getTime(), fuelLevel: 83, event: null },
-  { time: subMinutes(base, 150).getTime(), fuelLevel: 79, event: null },
-  { time: subMinutes(base, 120).getTime(), fuelLevel: 76, event: null },
-  { time: subMinutes(base, 90).getTime(), fuelLevel: 60, event: "Theft" },
-  { time: subMinutes(base, 60).getTime(), fuelLevel: 59, event: null },
-  { time: subMinutes(base, 30).getTime(), fuelLevel: 75, event: "Refuel" },
-  { time: base.getTime(), fuelLevel: 74, event: null },
-];
+const FuelChart: React.FC<FuelChartProps> = ({ fuelData, events, busId }) => {
+  const parsedData = fuelData.map((d) => ({
+    time: new Date(d.timestamp).getTime(),
+    fuelLevel: d.fuelLevel,
+    event: d.eventType || null,
+  }));
 
-const FuelChart: React.FC = () => {
   return (
     <section className="bg-white rounded-xl shadow p-6 mt-10">
-      <h3 className="text-xl font-semibold text-gray-800 mb-4">📈 Fuel Level Graph</h3>
+      <h3 className="text-xl font-semibold text-gray-800 mb-4">
+        📈 Fuel Level Graph – <span className="text-blue-600">{busId}</span>
+      </h3>
+
       <ResponsiveContainer width="100%" height={300}>
-        <LineChart data={mockFuelData}>
+        <LineChart data={parsedData}>
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis
             dataKey="time"
@@ -53,7 +47,10 @@ const FuelChart: React.FC = () => {
             scale="time"
           />
           <YAxis />
-          <Tooltip />
+          <Tooltip
+            labelFormatter={(label) => format(new Date(label), "PPpp")}
+            formatter={(value: any, name: string) => [`${value}%`, "Fuel Level"]}
+          />
           <Line
             type="monotone"
             dataKey="fuelLevel"
@@ -61,24 +58,27 @@ const FuelChart: React.FC = () => {
             strokeWidth={2}
             dot={false}
           />
+
+          {/* Event markers */}
           <Scatter
-            data={mockFuelData.filter((d) => d.event === "Theft")}
+            data={parsedData.filter((d) => d.event === "Theft")}
             fill="#ef4444"
             shape="triangle"
           />
           <Scatter
-            data={mockFuelData.filter((d) => d.event === "Refuel")}
+            data={parsedData.filter((d) => d.event === "Refuel")}
             fill="#10b981"
             shape="square"
           />
           <Scatter
-            data={mockFuelData.filter((d) => d.event === "Drop")}
+            data={parsedData.filter((d) => d.event === "Drop")}
             fill="#f59e0b"
             shape="circle"
           />
         </LineChart>
       </ResponsiveContainer>
 
+      {/* Legend */}
       <div className="flex items-center gap-6 mt-4 text-sm">
         <div className="flex items-center gap-2">
           <div className="w-3 h-3 bg-red-500 rotate-45" /> Theft

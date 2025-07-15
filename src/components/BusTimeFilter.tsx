@@ -1,6 +1,7 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { format } from "date-fns";
 import { DayPicker } from "react-day-picker";
+import axios from "axios";
 import "react-day-picker/dist/style.css";
 
 interface Props {
@@ -21,11 +22,6 @@ interface Props {
   showEndPicker: boolean;
   setShowEndPicker: (val: boolean) => void;
 }
-
-const knownBuses = [
-  "Bus 1001", "Bus 1002", "Bus 1003",
-  "Bus 1004", "Bus 1005", "Bus 1020", "Bus 1055"
-];
 
 const timeOptions = [
   "Today", "Yesterday", "This Week", "Last Week",
@@ -50,10 +46,28 @@ const BusTimeFilter: React.FC<Props> = ({
   showEndPicker,
   setShowEndPicker,
 }) => {
+  const [busOptions, setBusOptions] = useState<string[]>([]);
+
   useEffect(() => {
-    const match = knownBuses.find(b => b.toLowerCase() === busSearch.toLowerCase());
+    const fetchBuses = async () => {
+      try {
+        const res = await axios.get("/dashboard");
+        const topBuses = res.data?.topBuses || [];
+        const ids = topBuses.map((b: any) => b.busId);
+        setBusOptions(ids);
+      } catch (err) {
+        console.error("Failed to fetch buses:", err);
+      }
+    };
+
+    fetchBuses();
+  }, []);
+
+  // Auto-select if exact match
+  useEffect(() => {
+    const match = busOptions.find((b) => b.toLowerCase() === busSearch.toLowerCase());
     setSelectedBus(match || null);
-  }, [busSearch, setSelectedBus]);
+  }, [busSearch, busOptions]);
 
   return (
     <section className="bg-white rounded-xl p-6 shadow border space-y-6">
@@ -71,9 +85,9 @@ const BusTimeFilter: React.FC<Props> = ({
             className="w-full border border-gray-300 rounded-md px-4 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
 
-          {busSearch && !knownBuses.includes(busSearch) && (
+          {busSearch && !busOptions.includes(busSearch) && (
             <ul className="absolute z-10 w-full bg-white border mt-1 rounded-md shadow max-h-40 overflow-y-auto">
-              {knownBuses
+              {busOptions
                 .filter((bus) =>
                   bus.toLowerCase().includes(busSearch.toLowerCase())
                 )
@@ -93,12 +107,12 @@ const BusTimeFilter: React.FC<Props> = ({
           )}
         </div>
 
-         {/* Warning */}
-  {busSearch && !selectedBus && (
-    <p className="text-sm text-red-500 mt-2">
-      ⚠️ Bus not found. Please check the number or select from suggestions.
-    </p>
-  )}
+        {/* Warning */}
+        {busSearch && !selectedBus && (
+          <p className="text-sm text-red-500 mt-2">
+            ⚠️ Bus not found. Please check the number or select from suggestions.
+          </p>
+        )}
 
         {selectedBus && (
           <p className="text-sm text-gray-500 mt-1">
@@ -107,7 +121,7 @@ const BusTimeFilter: React.FC<Props> = ({
         )}
       </div>
 
-      {/* Time Range */}
+      {/* Time Range Dropdown */}
       <div>
         <label className="block text-sm font-semibold text-gray-700 mb-1">
           Time Range
@@ -133,10 +147,10 @@ const BusTimeFilter: React.FC<Props> = ({
         </select>
       </div>
 
-      {/*  Custom Date Range */}
+      {/* Custom Date Range */}
       {showCustom && (
         <div className="flex flex-wrap gap-6 pt-2">
-          {/* Start Date Picker */}
+          {/* Start Picker */}
           <div>
             <label className="text-sm font-medium">Start Date</label>
             {showStartPicker ? (
@@ -170,7 +184,7 @@ const BusTimeFilter: React.FC<Props> = ({
             )}
           </div>
 
-          {/* End Date Picker */}
+          {/* End Picker */}
           <div>
             <label className="text-sm font-medium">End Date</label>
             {showEndPicker ? (

@@ -1,4 +1,3 @@
-// components/MonitoredBusCard.tsx
 import React from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -10,6 +9,7 @@ interface MonitoredBusCardProps {
   busId: string;
   fuelLevel?: number;
   sensorStatus?: "Active" | "Inactive";
+  onClick?: () => void; // ✅ Add this
 }
 
 const MonitoredBusCard: React.FC<MonitoredBusCardProps> = ({
@@ -20,11 +20,16 @@ const MonitoredBusCard: React.FC<MonitoredBusCardProps> = ({
   busId,
   fuelLevel = 0,
   sensorStatus = "Active",
+  onClick,
 }) => {
   const navigate = useNavigate();
 
   const handleClick = () => {
-    navigate(`/fuel-theft?bus=${busId}`);
+    if (onClick) {
+      onClick(); // Dashboard internal click
+    } else {
+      navigate(`/fuel-theft?bus=${busId}`); // Default navigation
+    }
   };
 
   const badgeColor =
