@@ -16,7 +16,7 @@ interface FuelChartProps {
   fuelData: {
     timestamp: string;
     fuelLevel: number;
-    eventType?: "Refuel" | "Theft" | "Drop" | "Normal";
+    eventType?: "REFUEL" | "THEFT" | "DROP" | "NORMAL";
     description?: string;
   }[];
   events: FuelChartProps["fuelData"];
@@ -27,9 +27,16 @@ const FuelChart: React.FC<FuelChartProps> = ({ fuelData, events, busId }) => {
   const parsedData = fuelData.map((d) => ({
     time: new Date(d.timestamp).getTime(),
     fuelLevel: d.fuelLevel,
-    event: d.eventType || null,
+    event: d.eventType?.toUpperCase() || null,
   }));
-
+  
+  if (!fuelData.length) {
+    return (
+      <div className="bg-white rounded-xl shadow p-6 mt-10 text-center text-gray-500">
+        No fuel data available for the selected date range.
+      </div>
+    );
+  }
   return (
     <section className="bg-white rounded-xl shadow p-6 mt-10">
       <h3 className="text-xl font-semibold text-gray-800 mb-4">
@@ -37,7 +44,7 @@ const FuelChart: React.FC<FuelChartProps> = ({ fuelData, events, busId }) => {
       </h3>
 
       <ResponsiveContainer width="100%" height={300}>
-        <LineChart data={parsedData}>
+        <LineChart data={parsedData} margin={{ top: 10, right: 30, left: 10, bottom: 10 }}>
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis
             dataKey="time"
@@ -46,32 +53,39 @@ const FuelChart: React.FC<FuelChartProps> = ({ fuelData, events, busId }) => {
             domain={["dataMin", "dataMax"]}
             scale="time"
           />
-          <YAxis />
+          <YAxis
+            domain={["auto", "auto"]}
+            label={{ value: "Fuel (%)", angle: -90, position: "insideLeft" }}
+            tick={{ fontSize: 12 }}
+          />
+
           <Tooltip
             labelFormatter={(label) => format(new Date(label), "PPpp")}
-            formatter={(value: any, name: string) => [`${value}%`, "Fuel Level"]}
+            formatter={(value: any) => [`${value}%`, "Fuel Level"]}
           />
           <Line
             type="monotone"
             dataKey="fuelLevel"
             stroke="#3b82f6"
             strokeWidth={2}
-            dot={false}
+            dot={{ r: 2 }}
+            activeDot={{ r: 5 }}
           />
+
 
           {/* Event markers */}
           <Scatter
-            data={parsedData.filter((d) => d.event === "Theft")}
+            data={parsedData.filter((d) => d.event === "THEFT")}
             fill="#ef4444"
             shape="triangle"
           />
           <Scatter
-            data={parsedData.filter((d) => d.event === "Refuel")}
+            data={parsedData.filter((d) => d.event === "REFUEL")}
             fill="#10b981"
             shape="square"
           />
           <Scatter
-            data={parsedData.filter((d) => d.event === "Drop")}
+            data={parsedData.filter((d) => d.event === "DROP")}
             fill="#f59e0b"
             shape="circle"
           />

@@ -1,7 +1,6 @@
 // src/App.tsx
 import "react-day-picker/dist/style.css";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
-
 import Dashboard from "./pages/Dashboard";
 import FuelTheft from "./pages/FuelTheft";
 import BusEvents from "./pages/BusEvents";

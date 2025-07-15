@@ -1,6 +1,5 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-
 interface MonitoredBusCardProps {
   imageUrl: string;
   regNumber: string;
@@ -9,6 +8,7 @@ interface MonitoredBusCardProps {
   busId: string;
   fuelLevel?: number;
   sensorStatus?: "Active" | "Inactive";
+  status: "normal" | "alert" | "offline";
   onClick?: () => void; // ✅ Add this
 }
 
@@ -19,6 +19,7 @@ const MonitoredBusCard: React.FC<MonitoredBusCardProps> = ({
   route,
   busId,
   fuelLevel = 0,
+  status = "normal",
   sensorStatus = "Active",
   onClick,
 }) => {
@@ -31,6 +32,7 @@ const MonitoredBusCard: React.FC<MonitoredBusCardProps> = ({
       navigate(`/fuel-theft?bus=${busId}`); // Default navigation
     }
   };
+ imageUrl= "src/assets/temp_bus.avif"; // Placeholder image URL
 
   const badgeColor =
     sensorStatus === "Active" ? "bg-green-500" : "bg-gray-400";
@@ -39,7 +41,8 @@ const MonitoredBusCard: React.FC<MonitoredBusCardProps> = ({
     <div
       onClick={handleClick}
       title={`Bus ID: ${busId}\nFuel Level: ${fuelLevel}%`}
-      className="group relative flex items-center border-2 border-gray-200 bg-white rounded-2xl shadow transition-all hover:shadow-lg hover:border-blue-500 hover:scale-[1.02] cursor-pointer w-full max-w-xl"
+      // className="group relative flex items-center border-2 border-gray-200 bg-white rounded-2xl shadow transition-all hover:shadow-lg hover:border-blue-500 hover:scale-[1.02] cursor-pointer w-full max-w-xl"
+      className="group relative flex items-center border-2 border-gray-200 bg-white rounded-2xl shadow transition-all hover:shadow-lg hover:border-blue-500 hover:scale-[1.02] cursor-pointer w-full"
     >
       {/* Image Section */}
       <div className="w-32 h-32 overflow-hidden rounded-l-2xl">
@@ -61,7 +64,7 @@ const MonitoredBusCard: React.FC<MonitoredBusCardProps> = ({
       <span
         className={`absolute top-2 right-2 text-xs text-white px-2 py-1 rounded-full shadow ${badgeColor}`}
       >
-        {sensorStatus}
+        {status}
       </span>
     </div>
   );

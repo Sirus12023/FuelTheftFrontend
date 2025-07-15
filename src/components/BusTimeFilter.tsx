@@ -3,6 +3,12 @@ import { format } from "date-fns";
 import { DayPicker } from "react-day-picker";
 import axios from "axios";
 import "react-day-picker/dist/style.css";
+import { API_BASE_URL } from "../config";
+
+interface BusOption {
+  busId: string;
+  registrationNo: string;
+}
 
 interface Props {
   busSearch: string;
@@ -24,8 +30,13 @@ interface Props {
 }
 
 const timeOptions = [
-  "Today", "Yesterday", "This Week", "Last Week",
-  "This Month", "Last Month", "Custom"
+  "Today",
+  "Yesterday",
+  "This Week",
+  "Last Week",
+  "This Month",
+  "Last Month",
+  "Custom",
 ];
 
 const BusTimeFilter: React.FC<Props> = ({
@@ -46,15 +57,17 @@ const BusTimeFilter: React.FC<Props> = ({
   showEndPicker,
   setShowEndPicker,
 }) => {
-  const [busOptions, setBusOptions] = useState<string[]>([]);
+  const [busOptions, setBusOptions] = useState<BusOption[]>([]);
 
   useEffect(() => {
     const fetchBuses = async () => {
       try {
-        const res = await axios.get("/dashboard");
+        const res = await axios.get(`${API_BASE_URL}/dashboard`);
         const topBuses = res.data?.topBuses || [];
-        const ids = topBuses.map((b: any) => b.busId);
-        setBusOptions(ids);
+        setBusOptions(topBuses.map((b: any) => ({
+          busId: b.busId,
+          registrationNo: b.registrationNo
+        })));
       } catch (err) {
         console.error("Failed to fetch buses:", err);
       }
@@ -63,60 +76,69 @@ const BusTimeFilter: React.FC<Props> = ({
     fetchBuses();
   }, []);
 
-  // Auto-select if exact match
+  // Auto-select exact match on registration number
   useEffect(() => {
-    const match = busOptions.find((b) => b.toLowerCase() === busSearch.toLowerCase());
-    setSelectedBus(match || null);
+    const match = busOptions.find(
+      (b) => b.registrationNo.toLowerCase() === busSearch.toLowerCase()
+    );
+    if (match) {
+      setSelectedBus(match.busId);
+    } else {
+      setSelectedBus(null);
+    }
   }, [busSearch, busOptions]);
+
+  const filteredSuggestions = busOptions.filter(
+    (b) =>
+      b.registrationNo.toLowerCase().includes(busSearch.toLowerCase()) &&
+      b.registrationNo.toLowerCase() !== busSearch.toLowerCase()
+  );
 
   return (
     <section className="bg-white rounded-xl p-6 shadow border space-y-6">
-      {/* Bus Input */}
+      {/* Bus Registration Number Search */}
       <div>
         <label className="block text-sm font-semibold text-gray-700 mb-1">
-          Bus Number
+          Search by Bus Registration No.
         </label>
         <div className="relative">
           <input
             type="text"
             value={busSearch}
             onChange={(e) => setBusSearch(e.target.value)}
-            placeholder="Enter bus number..."
+            placeholder="e.g. TEST-1234"
             className="w-full border border-gray-300 rounded-md px-4 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
 
-          {busSearch && !busOptions.includes(busSearch) && (
+          {/* Suggestions */}
+          {filteredSuggestions.length > 0 && (
             <ul className="absolute z-10 w-full bg-white border mt-1 rounded-md shadow max-h-40 overflow-y-auto">
-              {busOptions
-                .filter((bus) =>
-                  bus.toLowerCase().includes(busSearch.toLowerCase())
-                )
-                .map((bus) => (
-                  <li
-                    key={bus}
-                    onClick={() => {
-                      setBusSearch(bus);
-                      setSelectedBus(bus);
-                    }}
-                    className="px-4 py-2 cursor-pointer hover:bg-blue-100"
-                  >
-                    {bus}
-                  </li>
-                ))}
+              {filteredSuggestions.map((b) => (
+                <li
+                  key={b.busId}
+                  onClick={() => {
+                    setBusSearch(b.registrationNo);
+                    setSelectedBus(b.busId);
+                  }}
+                  className="px-4 py-2 cursor-pointer hover:bg-blue-100"
+                >
+                  {b.registrationNo}
+                </li>
+              ))}
             </ul>
           )}
         </div>
 
-        {/* Warning */}
+        {/* Validation */}
         {busSearch && !selectedBus && (
           <p className="text-sm text-red-500 mt-2">
-            ⚠️ Bus not found. Please check the number or select from suggestions.
+            ⚠️ Bus not found. Please check the registration number.
           </p>
         )}
 
         {selectedBus && (
           <p className="text-sm text-gray-500 mt-1">
-            Selected: <span className="font-semibold">{selectedBus}</span>
+            Selected Bus ID: <span className="font-semibold">{selectedBus}</span>
           </p>
         )}
       </div>
@@ -133,8 +155,8 @@ const BusTimeFilter: React.FC<Props> = ({
             setTimeRange(val);
             setShowCustom(val === "Custom");
             if (val !== "Custom") {
-              setShowStartPicker(true);
-              setShowEndPicker(true);
+              setShowStartPicker(false);
+              setShowEndPicker(false);
             }
           }}
           className="w-full border border-gray-300 rounded-md px-4 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -147,10 +169,10 @@ const BusTimeFilter: React.FC<Props> = ({
         </select>
       </div>
 
-      {/* Custom Date Range */}
+      {/* Custom Date Range Pickers */}
       {showCustom && (
         <div className="flex flex-wrap gap-6 pt-2">
-          {/* Start Picker */}
+          {/* Start Date */}
           <div>
             <label className="text-sm font-medium">Start Date</label>
             {showStartPicker ? (
@@ -161,9 +183,9 @@ const BusTimeFilter: React.FC<Props> = ({
                   setStartDate(date);
                   setShowStartPicker(false);
                 }}
-                captionLayout="dropdown"
                 fromDate={new Date(2020, 0, 1)}
-                toDate={new Date(new Date().getFullYear() + 1, 11, 31)}
+                toDate={new Date()}
+                captionLayout="dropdown"
                 className="border rounded-md p-2"
               />
             ) : (
@@ -184,7 +206,7 @@ const BusTimeFilter: React.FC<Props> = ({
             )}
           </div>
 
-          {/* End Picker */}
+          {/* End Date */}
           <div>
             <label className="text-sm font-medium">End Date</label>
             {showEndPicker ? (
@@ -195,9 +217,9 @@ const BusTimeFilter: React.FC<Props> = ({
                   setEndDate(date);
                   setShowEndPicker(false);
                 }}
-                captionLayout="dropdown"
                 fromDate={new Date(2020, 0, 1)}
-                toDate={new Date(new Date().getFullYear() + 1, 11, 31)}
+                toDate={new Date()}
+                captionLayout="dropdown"
                 className="border rounded-md p-2"
               />
             ) : (
