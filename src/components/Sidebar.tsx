@@ -18,13 +18,16 @@ const Sidebar: React.FC = () => {
 
   return (
     <aside
-      className={`h-screen fixed top-0 left-0 z-20 transition-all duration-300 shadow-xl border-r border-blue-100 bg-gradient-to-b from-white to-blue-50 ${
-        collapsed ? "w-16" : "w-60"
-      }`}
+      className={`h-screen fixed top-0 left-0 z-30 transition-all duration-300 shadow-lg ${
+        collapsed ? "w-16" : "w-64"
+      } bg-gradient-to-b from-blue-100 to-blue-200 border-r border-blue-300`}
     >
       {/* Logo & Toggle */}
       <div className="p-4 flex items-center justify-between">
-        <button onClick={() => setCollapsed(!collapsed)} className="text-blue-600 hover:text-blue-800">
+        <button
+          onClick={() => setCollapsed(!collapsed)}
+          className="text-blue-600 hover:text-blue-800"
+        >
           <FaBars className="text-xl" />
         </button>
         {!collapsed && (
@@ -35,17 +38,16 @@ const Sidebar: React.FC = () => {
       </div>
 
       {/* Navigation Links */}
-      <nav className="mt-8 px-2 space-y-1">
+      <nav className="mt-6 px-2 space-y-2">
         {links.map(({ to, label, icon }) => (
           <NavLink
             key={label}
             to={to}
             className={({ isActive }) =>
-              `flex items-center gap-4 p-3 rounded-lg transition-all duration-200 group
-              ${
+              `flex items-center gap-4 p-3 rounded-md transition-all duration-200 group ${
                 isActive
-                  ? "bg-blue-100 text-blue-700 font-semibold shadow-inner"
-                  : "text-gray-600 hover:bg-blue-100 hover:text-blue-700"
+                  ? "bg-white text-blue-800 font-semibold shadow"
+                  : "hover:bg-blue-50 hover:text-blue-700 text-blue-600"
               }`
             }
           >
