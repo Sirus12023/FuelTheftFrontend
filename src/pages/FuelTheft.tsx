@@ -26,20 +26,21 @@ const FuelTheft: React.FC = () => {
   const [events, setEvents] = useState([]);
   const [busDetails, setBusDetails] = useState<any>(null);
 
-  // Apply initial bus from URL
+  // Load from URL on mount
   useEffect(() => {
     if (initialBus) {
       setSelectedBus(initialBus);
+      setSearch(initialBus); // optionally prefill search box too
     }
   }, [initialBus]);
 
-  // Fetch bus fuel + info data
+  // Fetch fuel + event data
   useEffect(() => {
     if (!selectedBus) return;
 
     const fetchBusData = async () => {
       try {
-        const res = await axios.get(`${API_BASE_URL}/buses/${selectedBus}/details`, {
+        const res = await axios.get<BusDetailsResponse>(`${API_BASE_URL}/buses/${selectedBus}/details`, {
           params: {
             timeRange,
             startDate: startDate?.toISOString(),
@@ -47,16 +48,14 @@ const FuelTheft: React.FC = () => {
           },
         });
 
-        const data = res.data;
-
-        const readings = (data.readings || []).map((r: any) => ({
+        const readings = (res.data.readings || []).map((r: any) => ({
           ...r,
           eventType: r.eventType?.toUpperCase() || "NORMAL",
         }));
 
         setFuelData(readings);
         setEvents(readings.filter((r: any) => r.eventType !== "NORMAL"));
-        setBusDetails(data);
+        setBusDetails(res.data);
       } catch (error) {
         console.error("Error fetching bus fuel data:", error);
       }
@@ -77,29 +76,29 @@ const FuelTheft: React.FC = () => {
         </p>
       </div>
 
-      {/* Filter */}
+      {/* Filter Component */}
       <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
-      <BusTimeFilter
-        busSearch={search}
-        setBusSearch={setSearch}
-        selectedBus={selectedBus}
-        setSelectedBus={setSelectedBus}
-        timeRange={timeRange}
-        setTimeRange={setTimeRange}
-        showCustom={showCustom}
-        setShowCustom={setShowCustom}
-        startDate={startDate}
-        setStartDate={setStartDate}
-        endDate={endDate}
-        setEndDate={setEndDate}
-        showStartPicker={showStartPicker}
-        setShowStartPicker={setShowStartPicker}
-        showEndPicker={showEndPicker}
-        setShowEndPicker={setShowEndPicker}
-      />
+        <BusTimeFilter
+          busSearch={search}
+          setBusSearch={setSearch}
+          selectedBusId={selectedBus}
+          setSelectedBusId={setSelectedBus}
+          timeRange={timeRange}
+          setTimeRange={setTimeRange}
+          showCustom={showCustom}
+          setShowCustom={setShowCustom}
+          startDate={startDate}
+          setStartDate={setStartDate}
+          endDate={endDate}
+          setEndDate={setEndDate}
+          showStartPicker={showStartPicker}
+          setShowStartPicker={setShowStartPicker}
+          showEndPicker={showEndPicker}
+          setShowEndPicker={setShowEndPicker}
+        />
       </div>
 
-      {/* No Bus Selected */}
+      {/* Placeholder */}
       {!selectedBus && (
         <div className="bg-gradient-to-br from-white to-blue-50 border rounded-xl shadow-md text-center py-24 px-4 text-gray-600 animate-fade-in">
           <div className="mb-4">
@@ -115,22 +114,22 @@ const FuelTheft: React.FC = () => {
         </div>
       )}
 
-
-      {/* Bus Details */}
+      {/* Bus Info */}
       {selectedBus && busDetails && (
         <div className="w-full">
-        <MonitoredBusCard
-          busId={selectedBus}
-          regNumber={busDetails.registrationNo}
-          driver={busDetails.driver || "Unassigned"}
-          route={busDetails.route || "Unknown"}
-          fuelLevel={busDetails.currentFuelLevel}
-          status={"normal"} // you can change this to actual if backend adds it
-          imageUrl="/src/assets/temp_bus.avif"
-        />
+          <MonitoredBusCard
+            busId={selectedBus}
+            regNumber={busDetails.registrationNo}
+            driver={busDetails.driver || "Unassigned"}
+            route={busDetails.route || "Unknown"}
+            fuelLevel={busDetails.currentFuelLevel}
+            status={busDetails.status || "normal"}
+            imageUrl="/src/assets/temp_bus.avif"
+          />
         </div>
       )}
 
+      {/* Fuel Chart */}
       {selectedBus && (
         <FuelChart fuelData={fuelData} events={events} busId={selectedBus} />
       )}
@@ -139,6 +138,8 @@ const FuelTheft: React.FC = () => {
 };
 
 export default FuelTheft;
+
+
 
 
 

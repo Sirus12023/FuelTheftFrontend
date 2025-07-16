@@ -53,8 +53,8 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
     const fetchDashboard = async () => {
       try {
-        const res = await axios.get(`${API_BASE_URL}/dashboard`);
-        setStats(res.data);
+        const res = await axios.get<DashboardStats>(`${API_BASE_URL}/dashboard`);
+setStats(res.data);
       } catch (err) {
         console.error("Error fetching dashboard:", err);
       }
@@ -68,8 +68,9 @@ const Dashboard: React.FC = () => {
 
     const fetchBusDetails = async () => {
       try {
-        const res = await axios.get(`${API_BASE_URL}/buses/${selectedBus}/details`);
-        const readings: Reading[] = res.data.readings || [];
+        const res = await axios.get<{ readings: Reading[] }>(`${API_BASE_URL}/buses/${selectedBus}/details`);
+const readings = res.data.readings || [];
+
         setFuelData(readings);
         setEvents(readings.filter(r => r.eventType && r.eventType !== "UNKNOWN"));
       } catch (err) {
@@ -100,12 +101,9 @@ const Dashboard: React.FC = () => {
   </div>
 
   <div className="relative z-10 text-center py-12 px-6 bg-gradient-to-br from-white via-blue-50 to-white rounded-2xl shadow-lg max-w-4xl mx-auto space-y-6">
-    <h1 className="text-5xl md:text-6xl font-extrabold text-blue-900 leading-tight tracking-tight">
-      🛡️ FuelSafe
-    </h1>
-
+  
     <p className="text-lg md:text-xl text-gray-700 leading-relaxed font-medium max-w-2xl mx-auto">
-      Welcome to <span className="font-semibold text-blue-600">FuelSafe</span> — your centralized platform
+      Welcome to <span className="font-signord font-semibold text-blue-600">FuelSafe</span> — your centralized platform
       to monitor fuel usage, detect theft, and track refueling activities across your fleet in real time.
     </p>
 

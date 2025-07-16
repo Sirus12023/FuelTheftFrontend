@@ -1,9 +1,4 @@
-<<<<<<< HEAD
 import React, { useEffect, useState } from "react";
-=======
-// components/BusTimeFilter.tsx
-import React, { useEffect } from "react";
->>>>>>> d354f6165184b973dcd9ff24a44fe8ddfc03ce57
 import { format } from "date-fns";
 import { DayPicker } from "react-day-picker";
 import axios from "axios";
@@ -34,7 +29,6 @@ interface Props {
   setShowEndPicker: (val: boolean) => void;
 }
 
-<<<<<<< HEAD
 const timeOptions = [
   "Today",
   "Yesterday",
@@ -43,14 +37,6 @@ const timeOptions = [
   "This Month",
   "Last Month",
   "Custom",
-=======
-const knownBuses = [
-  "Bus1001", "Bus1002", "Bus1003", "Bus1004", "Bus1005"
-];
-
-const timeOptions = [
-  "Today", "Yesterday", "This Week", "Last Week", "This Month", "Last Month", "Custom"
->>>>>>> d354f6165184b973dcd9ff24a44fe8ddfc03ce57
 ];
 
 const BusTimeFilter: React.FC<Props> = ({
@@ -74,14 +60,13 @@ const BusTimeFilter: React.FC<Props> = ({
   const [busOptions, setBusOptions] = useState<BusOption[]>([]);
 
   useEffect(() => {
-<<<<<<< HEAD
     const fetchBuses = async () => {
       try {
-        const res = await axios.get(`${API_BASE_URL}/dashboard`);
+        const res = await axios.get<{ topBuses: BusOption[] }>(`${API_BASE_URL}/dashboard`);
         const topBuses = res.data?.topBuses || [];
         setBusOptions(topBuses.map((b: any) => ({
           busId: b.busId,
-          registrationNo: b.registrationNo
+          registrationNo: b.registrationNo,
         })));
       } catch (err) {
         console.error("Failed to fetch buses:", err);
@@ -91,15 +76,15 @@ const BusTimeFilter: React.FC<Props> = ({
     fetchBuses();
   }, []);
 
-  // Auto-select exact match on registration number
+  // Auto-select if exact match is typed
   useEffect(() => {
     const match = busOptions.find(
       (b) => b.registrationNo.toLowerCase() === busSearch.toLowerCase()
     );
     if (match) {
-      setSelectedBus(match.busId);
+      setSelectedBusId(match.busId);
     } else {
-      setSelectedBus(null);
+      setSelectedBusId(null);
     }
   }, [busSearch, busOptions]);
 
@@ -107,40 +92,24 @@ const BusTimeFilter: React.FC<Props> = ({
     (b) =>
       b.registrationNo.toLowerCase().includes(busSearch.toLowerCase()) &&
       b.registrationNo.toLowerCase() !== busSearch.toLowerCase()
-=======
-    const exactMatch = knownBuses.find(b => b.toLowerCase() === busSearch.toLowerCase());
-    setSelectedBusId(exactMatch || null);
-  }, [busSearch]);
-
-  const filteredSuggestions = knownBuses.filter(b =>
-    b.toLowerCase().includes(busSearch.toLowerCase())
->>>>>>> d354f6165184b973dcd9ff24a44fe8ddfc03ce57
   );
 
   return (
     <section className="bg-white rounded-xl p-6 shadow border space-y-6">
-<<<<<<< HEAD
-      {/* Bus Registration Number Search */}
+      {/* Search */}
       <div>
         <label className="block text-sm font-semibold text-gray-700 mb-1">
           Search by Bus Registration No.
         </label>
-=======
-      {/* 🔍 Bus Input */}
-      <div>
-        <label className="block text-sm font-semibold text-gray-700 mb-1">Bus Number</label>
->>>>>>> d354f6165184b973dcd9ff24a44fe8ddfc03ce57
         <div className="relative">
           <input
             type="text"
             value={busSearch}
             onChange={(e) => setBusSearch(e.target.value)}
-            placeholder="e.g. TEST-1234"
+            placeholder="e.g. UP32AB1234"
             className="w-full border border-gray-300 rounded-md px-4 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
 
-<<<<<<< HEAD
-          {/* Suggestions */}
           {filteredSuggestions.length > 0 && (
             <ul className="absolute z-10 w-full bg-white border mt-1 rounded-md shadow max-h-40 overflow-y-auto">
               {filteredSuggestions.map((b) => (
@@ -148,60 +117,36 @@ const BusTimeFilter: React.FC<Props> = ({
                   key={b.busId}
                   onClick={() => {
                     setBusSearch(b.registrationNo);
-                    setSelectedBus(b.busId);
+                    setSelectedBusId(b.busId);
                   }}
                   className="px-4 py-2 cursor-pointer hover:bg-blue-100"
                 >
                   {b.registrationNo}
-=======
-          {busSearch && filteredSuggestions.length > 0 && busSearch !== selectedBusId &&(
-            <ul className="absolute z-10 w-full bg-white border mt-1 rounded-md shadow max-h-40 overflow-y-auto">
-              {filteredSuggestions.map((bus) => (
-                <li
-                  key={bus}
-                  onClick={() => {
-                    setBusSearch(bus);
-                    setSelectedBusId(bus);
-                      document.activeElement instanceof HTMLElement && document.activeElement.blur(); // removes focus
-                  }}
-                  className="px-4 py-2 cursor-pointer hover:bg-blue-100"
-                >
-                  {bus}
->>>>>>> d354f6165184b973dcd9ff24a44fe8ddfc03ce57
                 </li>
               ))}
             </ul>
           )}
         </div>
-        {busSearch && !knownBuses.some(b => b.toLowerCase() === busSearch.toLowerCase()) && (
-  <p className="text-sm text-red-500 mt-2">
-    ⚠️ Bus not found. Please check the number or select from suggestions.
-  </p>
-)}
 
-<<<<<<< HEAD
-        {/* Validation */}
-        {busSearch && !selectedBus && (
+        {/* Validation Messages */}
+        {busSearch && !selectedBusId && (
           <p className="text-sm text-red-500 mt-2">
             ⚠️ Bus not found. Please check the registration number.
           </p>
         )}
 
-        {selectedBus && (
+        {selectedBusId && (
           <p className="text-sm text-gray-500 mt-1">
-            Selected Bus ID: <span className="font-semibold">{selectedBus}</span>
+            Selected Bus ID: <span className="font-semibold">{selectedBusId}</span>
           </p>
         )}
       </div>
 
-      {/* Time Range Dropdown */}
-=======
-      </div>
-
-      {/* 🕒 Time Range */}
->>>>>>> d354f6165184b973dcd9ff24a44fe8ddfc03ce57
+      {/* Time Range */}
       <div>
-        <label className="block text-sm font-semibold text-gray-700 mb-1">Time Range</label>
+        <label className="block text-sm font-semibold text-gray-700 mb-1">
+          Time Range
+        </label>
         <select
           value={timeRange}
           onChange={(e) => {
@@ -221,11 +166,7 @@ const BusTimeFilter: React.FC<Props> = ({
         </select>
       </div>
 
-<<<<<<< HEAD
-      {/* Custom Date Range Pickers */}
-=======
-      {/* 📅 Custom Date Range */}
->>>>>>> d354f6165184b973dcd9ff24a44fe8ddfc03ce57
+      {/* Custom Date Range */}
       {showCustom && (
         <div className="flex flex-wrap gap-6 pt-2">
           {/* Start Date */}
@@ -249,7 +190,10 @@ const BusTimeFilter: React.FC<Props> = ({
                 <p className="text-sm text-gray-700 mt-2">
                   Selected: <span className="font-semibold">{startDate ? format(startDate, "PPP") : "Not selected"}</span>
                 </p>
-                <button className="text-sm text-blue-600 underline mt-1" onClick={() => setShowStartPicker(true)}>
+                <button
+                  className="text-sm text-blue-600 underline mt-1"
+                  onClick={() => setShowStartPicker(true)}
+                >
                   Change Start Date
                 </button>
               </>
@@ -277,7 +221,10 @@ const BusTimeFilter: React.FC<Props> = ({
                 <p className="text-sm text-gray-700 mt-2">
                   Selected: <span className="font-semibold">{endDate ? format(endDate, "PPP") : "Not selected"}</span>
                 </p>
-                <button className="text-sm text-blue-600 underline mt-1" onClick={() => setShowEndPicker(true)}>
+                <button
+                  className="text-sm text-blue-600 underline mt-1"
+                  onClick={() => setShowEndPicker(true)}
+                >
                   Change End Date
                 </button>
               </>

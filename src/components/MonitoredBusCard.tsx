@@ -9,7 +9,7 @@ interface MonitoredBusCardProps {
   fuelLevel?: number;
   sensorStatus?: "Active" | "Inactive";
   status: "normal" | "alert" | "offline";
-  onClick?: () => void; // ✅ Add this
+  onClick?: () => void; 
 }
 
 const MonitoredBusCard: React.FC<MonitoredBusCardProps> = ({
@@ -26,22 +26,11 @@ const MonitoredBusCard: React.FC<MonitoredBusCardProps> = ({
   const navigate = useNavigate();
 
   const handleClick = () => {
-<<<<<<< HEAD
     if (onClick) {
       onClick(); // Dashboard internal click
     } else {
       navigate(`/fuel-theft?bus=${busId}`); // Default navigation
     }
-=======
-    const params = new URLSearchParams({
-    bus: busId,
-    regNumber,
-    driver,
-    route,
-    imageUrl,
-  });
-    navigate(`/fuel-theft?${params.toString()}`);
->>>>>>> d354f6165184b973dcd9ff24a44fe8ddfc03ce57
   };
  imageUrl= "src/assets/temp_bus.avif"; // Placeholder image URL
 

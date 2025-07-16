@@ -10,10 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-<<<<<<< HEAD
     "@tailwindcss/vite": "^4.1.11",
-=======
->>>>>>> d354f6165184b973dcd9ff24a44fe8ddfc03ce57
     "axios": "^1.10.0",
     "react": "^19.1.0",
     "react-circular-progressbar": "^2.2.0",

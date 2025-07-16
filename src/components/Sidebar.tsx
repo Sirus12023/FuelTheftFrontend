@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React from "react";
 import {
   FaBars,
   FaHome,
@@ -7,9 +7,12 @@ import {
 } from "react-icons/fa";
 import { NavLink } from "react-router-dom";
 
-const Sidebar: React.FC = () => {
-  const [collapsed, setCollapsed] = useState(false);
+interface SidebarProps {
+  collapsed: boolean;
+  toggleCollapsed: () => void;
+}
 
+const Sidebar: React.FC<SidebarProps> = ({ collapsed, toggleCollapsed }) => {
   const links = [
     { to: "/", label: "Dashboard", icon: <FaHome /> },
     { to: "/fuel-theft", label: "Fuel Theft", icon: <FaBusAlt /> },
@@ -22,22 +25,20 @@ const Sidebar: React.FC = () => {
         collapsed ? "w-16" : "w-64"
       } bg-gradient-to-b from-blue-100 to-blue-200 border-r border-blue-300`}
     >
-      {/* Logo & Toggle */}
       <div className="p-4 flex items-center justify-between">
         <button
-          onClick={() => setCollapsed(!collapsed)}
+          onClick={toggleCollapsed}
           className="text-blue-600 hover:text-blue-800"
         >
           <FaBars className="text-xl" />
         </button>
-        {!collapsed && (
+        {/* {!collapsed && (
           <h2 className="text-lg font-extrabold text-blue-700 tracking-tight">
             FuelSafe
           </h2>
-        )}
+        )} */}
       </div>
 
-      {/* Navigation Links */}
       <nav className="mt-6 px-2 space-y-2">
         {links.map(({ to, label, icon }) => (
           <NavLink
