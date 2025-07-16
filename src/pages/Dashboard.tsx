@@ -11,6 +11,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import MonitoredBusCard from "../components/MonitoredBusCard";
+import bus1 from "../assets/bus1.jpg";
 
 interface Reading {
   timestamp: string;
@@ -37,6 +38,7 @@ interface DashboardStats {
 }
 
 const Dashboard: React.FC = () => {
+<<<<<<< HEAD
   const [stats, setStats] = useState<DashboardStats>({
     totalBuses: 0,
     activeAlerts: 0,
@@ -84,9 +86,37 @@ const Dashboard: React.FC = () => {
     { title: "Ongoing Alerts", value: stats.activeAlerts, icon: "🚨", color: "from-red-500 to-red-700" },
     { title: "Fuel Theft Events", value: stats.thefts, icon: "🔻", color: "from-yellow-500 to-yellow-700" },
     { title: "Refueling Events", value: stats.refuels, icon: "⛽", color: "from-green-500 to-green-700" },
+=======
+  const stats = [
+    {
+      title: "Total Buses",
+      value: 5,
+      icon: "🚌",
+      color: "from-blue-500 to-blue-700",
+    },
+    {
+      title: "Ongoing Alerts",
+      value: 5,
+      icon: "🚨",
+      color: "from-red-500 to-red-700",
+    },
+    {
+      title: "Fuel Theft Events",
+      value: 2,
+      icon: "🔻",
+      color: "from-yellow-500 to-yellow-700",
+    },
+    {
+      title: "Refueling Events",
+      value: 3,
+      icon: "⛽",
+      color: "from-green-500 to-green-700",
+    },
+>>>>>>> d354f6165184b973dcd9ff24a44fe8ddfc03ce57
   ];
 
   return (
+<<<<<<< HEAD
     <>
       <div className="space-y-10 px-6 py-8 max-w-7xl mx-auto">
         <section className="relative overflow-hidden bg-gradient-to-br from-blue-50 to-white rounded-2xl p-8 shadow border border-blue-100">
@@ -97,6 +127,68 @@ const Dashboard: React.FC = () => {
       className="h-full w-full object-cover rounded-2xl"
     />
   </div>
+=======
+    <div className="space-y-10 px-6 py-8 max-w-7xl mx-auto">
+   {/* Intro Section with Styling */}
+<section className="relative overflow-hidden bg-gradient-to-br from-blue-50 to-white rounded-2xl p-8 shadow border border-blue-100">
+  <div className="absolute inset-0 w-full h-full object-contain opacity-20 pointer-events-none">
+    <img
+      src= {bus1}
+      alt="Bus Illustration"
+      className="h-full w-full object-cover rounded-r-2xl"
+    />
+  </div>
+
+ <div className="relative z-10 text-center py-12 px-6 bg-gradient-to-br from-white via-blue-50 to-white rounded-2xl shadow-lg max-w-4xl mx-auto space-y-6">
+  <h1 className="text-5xl md:text-6xl font-extrabold text-blue-900 leading-tight tracking-tight">
+    🛡️ FuelSafe
+  </h1>
+
+  <p className="text-lg md:text-xl text-gray-700 leading-relaxed font-medium max-w-2xl mx-auto">
+    Welcome to <span className="font-semibold text-blue-600">FuelSafe</span> — your centralized platform
+    to monitor fuel usage, detect theft, and track refueling activities across your fleet in real time.
+  </p>
+
+  <div className="flex flex-wrap justify-center gap-3 mt-6">
+    <span className="bg-blue-100 text-blue-800 text-sm md:text-base font-medium px-4 py-2 rounded-full shadow-sm">
+      🔍 Real-time Monitoring
+    </span>
+    <span className="bg-yellow-100 text-yellow-800 text-sm md:text-base font-medium px-4 py-2 rounded-full shadow-sm">
+      ⚠️ Anomaly Detection
+    </span>
+    <span className="bg-green-100 text-green-800 text-sm md:text-base font-medium px-4 py-2 rounded-full shadow-sm">
+      ✅ 5 Buses Under Observation
+    </span>
+  </div>
+
+  <p className="text-sm md:text-base text-gray-600 max-w-2xl mx-auto mt-4 leading-relaxed">
+    We're currently in the testing phase with 5 buses actively monitored. Our system continuously analyzes
+    fuel consumption and sensor status to ensure data integrity. Scaling to full fleet support is planned
+    in the next deployment.
+  </p>
+</div>
+
+</section>
+
+      {/* Overview Heading */}
+     {/* <h2 className="text-2xl font-bold text-gray-800">📊 Dashboard Overview</h2> */}
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {stats.map((stat, idx) => (
+          <div
+            key={idx}
+            className={`bg-gradient-to-r ${stat.color} text-white p-6 rounded-xl shadow-md flex items-center gap-4 hover:scale-[1.02] transition-transform`}
+          >
+            <div className="text-4xl">{stat.icon}</div>
+            <div>
+              <h3 className="text-sm">{stat.title}</h3>
+              <p className="text-2xl font-bold">{stat.value}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+>>>>>>> d354f6165184b973dcd9ff24a44fe8ddfc03ce57
 
   <div className="relative z-10 text-center py-12 px-6 bg-gradient-to-br from-white via-blue-50 to-white rounded-2xl shadow-lg max-w-4xl mx-auto space-y-6">
     <h1 className="text-5xl md:text-6xl font-extrabold text-blue-900 leading-tight tracking-tight">
@@ -120,10 +212,57 @@ const Dashboard: React.FC = () => {
       </span>
     </div>
 
+<<<<<<< HEAD
     <p className="text-sm md:text-base text-gray-600 max-w-2xl mx-auto mt-4 leading-relaxed">
       We're currently in the testing phase with {stats.totalBuses} buses actively monitored. Our system continuously analyzes
       fuel consumption and sensor status to ensure data integrity. Scaling to full fleet support is planned in the next deployment.
     </p>
+=======
+     {/* Bus Overview Cards */}
+<div>
+  <h3 className="text-2xl font-semibold mb-4 text-gray-700">🚌 Monitored Buses</h3>
+  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+    {[
+      {
+        imageUrl: bus1,
+        regNumber: "UP32AB1234",
+        driver: "Ravi Kumar",
+        route: "Route 1",
+        busId: "Bus1001",
+        
+      },
+      {
+        imageUrl: bus1,
+        regNumber: "MH12CD5678",
+        driver: "Sumit Sharma",
+        route: "Route 2",
+        busId: "Bus1002",
+      },
+      {
+        imageUrl: bus1,
+        regNumber: "DL8CAF9876",
+        driver: "Amit Verma",
+        route: "Route 3",
+        busId: "Bus1003",
+      },
+      {
+        imageUrl: bus1,
+        regNumber: "RJ14XY6543",
+        driver: "Pawan Singh",
+        route: "Route 4",
+        busId: "Bus1004",
+      },
+      {
+        imageUrl: bus1,
+        regNumber: "KA03MN1122",
+        driver: "Rajesh Meena",
+        route: "Route 5",
+        busId: "Bus1005",
+      },
+    ].map((bus, idx) => (
+      <MonitoredBusCard key={idx} {...bus} />
+    ))}
+>>>>>>> d354f6165184b973dcd9ff24a44fe8ddfc03ce57
   </div>
 </section>
 
