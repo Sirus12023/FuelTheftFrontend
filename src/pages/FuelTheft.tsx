@@ -66,9 +66,19 @@ const FuelTheft: React.FC = () => {
   }, [selectedBus, timeRange, startDate, endDate]);
 
   return (
-    <div className="px-6 py-8 max-w-5xl mx-auto space-y-10">
-      <h2 className="text-3xl font-bold text-gray-800">🚨 Fuel Theft Monitoring</h2>
+    <div className="px-6 py-12 max-w-6xl mx-auto space-y-10 font-sans">
+      {/* Header */}
+      <div className="text-center space-y-2">
+        <h2 className="text-4xl sm:text-5xl font-extrabold text-blue-900">
+          🚨 Fuel Theft Monitoring
+        </h2>
+        <p className="text-gray-600 text-lg">
+          Monitor your fleet’s fuel activity with real-time detection & analysis
+        </p>
+      </div>
 
+      {/* Filter */}
+      <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
       <BusTimeFilter
         busSearch={search}
         setBusSearch={setSearch}
@@ -87,7 +97,26 @@ const FuelTheft: React.FC = () => {
         showEndPicker={showEndPicker}
         setShowEndPicker={setShowEndPicker}
       />
+      </div>
 
+      {/* No Bus Selected */}
+      {!selectedBus && (
+        <div className="bg-gradient-to-br from-white to-blue-50 border rounded-xl shadow-md text-center py-24 px-4 text-gray-600 animate-fade-in">
+          <div className="mb-4">
+            <svg className="h-16 w-16 text-blue-300 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.75 9.75h4.5M9.75 12.75h4.5M3.75 6h16.5M3.75 18h16.5M4.5 4.5v15M19.5 4.5v15" />
+            </svg>
+          </div>
+          <h3 className="text-2xl font-semibold text-gray-700 mb-2">No Bus Selected</h3>
+          <p className="max-w-md mx-auto text-base text-gray-600">
+            Please select a <span className="font-semibold text-blue-600">bus number</span> and
+            <span className="font-semibold text-blue-600"> time range</span> to view its analytics and events.
+          </p>
+        </div>
+      )}
+
+
+      {/* Bus Details */}
       {selectedBus && busDetails && (
         <div className="w-full">
         <MonitoredBusCard

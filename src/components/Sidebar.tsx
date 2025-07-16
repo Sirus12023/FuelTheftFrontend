@@ -1,6 +1,10 @@
-// components/Sidebar.tsx
 import React, { useState } from "react";
-import { FaBars, FaHome, FaBusAlt, FaClipboardList } from "react-icons/fa";
+import {
+  FaBars,
+  FaHome,
+  FaBusAlt,
+  FaClipboardList,
+} from "react-icons/fa";
 import { NavLink } from "react-router-dom";
 
 const Sidebar: React.FC = () => {
@@ -13,38 +17,50 @@ const Sidebar: React.FC = () => {
   ];
 
   return (
-    <div
-      className={`bg-white shadow-md h-screen fixed top-0 left-0 z-20 transition-all duration-300 ${
-        collapsed ? "w-16" : "w-56"
-      }`}
+    <aside
+      className={`h-screen fixed top-0 left-0 z-30 transition-all duration-300 shadow-lg ${
+        collapsed ? "w-16" : "w-64"
+      } bg-gradient-to-b from-blue-100 to-blue-200 border-r border-blue-300`}
     >
-      {/* Header / Toggle */}
-      <div className="p-4 flex justify-between items-center">
-        <button onClick={() => setCollapsed(!collapsed)} aria-label="Toggle Sidebar">
-          <FaBars className="text-xl text-blue-600" />
+      {/* Logo & Toggle */}
+      <div className="p-4 flex items-center justify-between">
+        <button
+          onClick={() => setCollapsed(!collapsed)}
+          className="text-blue-600 hover:text-blue-800"
+        >
+          <FaBars className="text-xl" />
         </button>
-        {!collapsed && <h2 className="text-lg font-bold text-blue-600">FuelSafe</h2>}
+        {!collapsed && (
+          <h2 className="text-lg font-extrabold text-blue-700 tracking-tight">
+            FuelSafe
+          </h2>
+        )}
       </div>
 
       {/* Navigation Links */}
-      <nav className="mt-8 space-y-2 px-2">
+      <nav className="mt-6 px-2 space-y-2">
         {links.map(({ to, label, icon }) => (
           <NavLink
-            to={to}
             key={label}
-            title={collapsed ? label : undefined}
+            to={to}
             className={({ isActive }) =>
-              `flex items-center gap-3 p-2 rounded-md transition hover:bg-blue-100 ${
-                isActive ? "bg-blue-100 text-blue-600" : "text-gray-600"
+              `flex items-center gap-4 p-3 rounded-md transition-all duration-200 group ${
+                isActive
+                  ? "bg-white text-blue-800 font-semibold shadow"
+                  : "hover:bg-blue-50 hover:text-blue-700 text-blue-600"
               }`
             }
           >
-            <span className="text-xl">{icon}</span>
-            {!collapsed && <span className="text-sm font-medium">{label}</span>}
+            <span className="text-lg">{icon}</span>
+            {!collapsed && (
+              <span className="text-sm font-medium group-hover:translate-x-1 transition-transform">
+                {label}
+              </span>
+            )}
           </NavLink>
         ))}
       </nav>
-    </div>
+    </aside>
   );
 };
 

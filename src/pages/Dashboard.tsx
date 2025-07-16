@@ -89,15 +89,44 @@ const Dashboard: React.FC = () => {
   return (
     <>
       <div className="space-y-10 px-6 py-8 max-w-7xl mx-auto">
-        <section className="bg-white rounded-2xl p-6 shadow border border-blue-100">
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">Welcome to Fuel Theft Monitoring!</h1>
-          <p className="text-gray-600 text-sm leading-relaxed">
-            Monitor real-time fuel usage and alerts across your fleet.
-          </p>
-          <p className="text-sm italic mt-2 text-gray-500">
-            Currently monitoring {stats.totalBuses} buses during testing phase.
-          </p>
-        </section>
+        <section className="relative overflow-hidden bg-gradient-to-br from-blue-50 to-white rounded-2xl p-8 shadow border border-blue-100">
+  <div className="absolute inset-0 w-full h-full object-contain opacity-20 pointer-events-none">
+    <img
+      src={bus1}
+      alt="Bus Illustration"
+      className="h-full w-full object-cover rounded-2xl"
+    />
+  </div>
+
+  <div className="relative z-10 text-center py-12 px-6 bg-gradient-to-br from-white via-blue-50 to-white rounded-2xl shadow-lg max-w-4xl mx-auto space-y-6">
+    <h1 className="text-5xl md:text-6xl font-extrabold text-blue-900 leading-tight tracking-tight">
+      🛡️ FuelSafe
+    </h1>
+
+    <p className="text-lg md:text-xl text-gray-700 leading-relaxed font-medium max-w-2xl mx-auto">
+      Welcome to <span className="font-semibold text-blue-600">FuelSafe</span> — your centralized platform
+      to monitor fuel usage, detect theft, and track refueling activities across your fleet in real time.
+    </p>
+
+    <div className="flex flex-wrap justify-center gap-3 mt-6">
+      <span className="bg-blue-100 text-blue-800 text-sm md:text-base font-medium px-4 py-2 rounded-full shadow-sm">
+        🔍 Real-time Monitoring
+      </span>
+      <span className="bg-yellow-100 text-yellow-800 text-sm md:text-base font-medium px-4 py-2 rounded-full shadow-sm">
+        ⚠️ Anomaly Detection
+      </span>
+      <span className="bg-green-100 text-green-800 text-sm md:text-base font-medium px-4 py-2 rounded-full shadow-sm">
+        ✅ {stats.totalBuses} Buses Under Observation
+      </span>
+    </div>
+
+    <p className="text-sm md:text-base text-gray-600 max-w-2xl mx-auto mt-4 leading-relaxed">
+      We're currently in the testing phase with {stats.totalBuses} buses actively monitored. Our system continuously analyzes
+      fuel consumption and sensor status to ensure data integrity. Scaling to full fleet support is planned in the next deployment.
+    </p>
+  </div>
+</section>
+
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {statCards.map((stat, idx) => (
