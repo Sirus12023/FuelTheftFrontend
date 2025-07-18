@@ -21,9 +21,9 @@ const BusSelector: React.FC<Props> = ({
   useEffect(() => {
     const fetchBuses = async () => {
       try {
-        const res = await axios.get("/dashboard");
+        const res = await axios.get<{ topBuses?: { busId: string }[] }>("/dashboard");
         const buses = res.data?.topBuses || [];
-        const busIds = buses.map((bus: any) => bus.busId);
+        const busIds = buses.map((bus) => bus.busId);
         setBusList(busIds);
       } catch (err) {
         console.error("Error fetching buses:", err);

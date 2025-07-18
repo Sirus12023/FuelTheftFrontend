@@ -1,4 +1,3 @@
-// components/FuelChart.tsx
 import React from "react";
 import {
   LineChart,
@@ -11,18 +10,27 @@ import {
 } from "recharts";
 import { format } from "date-fns";
 
+type EventType = "REFUEL" | "THEFT" | "DROP" | "NORMAL";
+
+interface RawReading {
+  timestamp: string;
+  fuelLevel: number;
+  eventType?: string;
+  description?: string;
+}
+
+interface ParsedDataPoint {
+  time: number;
+  fuelLevel: number;
+  event: EventType;
+}
+
 interface FuelChartProps {
-  fuelData: {
-    timestamp: string;
-    fuelLevel: number;
-    eventType?: "REFUEL" | "THEFT" | "DROP" | "NORMAL";
-    description?: string;
-  }[];
-  events: FuelChartProps["fuelData"];
+  fuelData: RawReading[];
   busId: string;
 }
 
-const FuelChart: React.FC<FuelChartProps> = ({ fuelData, events, busId }) => {
+const FuelChart: React.FC<FuelChartProps> = ({ fuelData, busId }) => {
   if (!fuelData.length) {
     return (
       <div className="bg-white rounded-xl shadow p-6 mt-10 text-center text-gray-500">
@@ -31,14 +39,19 @@ const FuelChart: React.FC<FuelChartProps> = ({ fuelData, events, busId }) => {
     );
   }
 
-  const parsedData = fuelData.map((d) => ({
+  const normalizeEvent = (rawEvent?: string): EventType => {
+    const upper = rawEvent?.toUpperCase();
+    if (upper === "REFUEL" || upper === "THEFT" || upper === "DROP") return upper;
+    return "NORMAL";
+  };
+
+  const parsedData: ParsedDataPoint[] = fuelData.map((d) => ({
     time: new Date(d.timestamp).getTime(),
     fuelLevel: d.fuelLevel,
-    event: d.eventType?.toUpperCase() || "NORMAL",
+    event: normalizeEvent(d.eventType),
   }));
 
-  // Dynamically color dots based on event type
-  const getDotColor = (event: string) => {
+  const getDotColor = (event: EventType) => {
     switch (event) {
       case "THEFT":
         return "#ef4444"; // red
@@ -57,6 +70,12 @@ const FuelChart: React.FC<FuelChartProps> = ({ fuelData, events, busId }) => {
         📈 Fuel Level Graph – <span className="text-blue-600">{busId}</span>
       </h3>
 
+      <p className="text-sm text-gray-500 mb-4">
+        Showing data from{" "}
+        <strong>{format(new Date(fuelData[0].timestamp), "PPpp")}</strong> to{" "}
+        <strong>{format(new Date(fuelData[fuelData.length - 1].timestamp), "PPpp")}</strong>
+      </p>
+
       <ResponsiveContainer width="100%" height={300}>
         <LineChart data={parsedData} margin={{ top: 10, right: 30, left: 10, bottom: 10 }}>
           <CartesianGrid strokeDasharray="3 3" />
@@ -68,43 +87,40 @@ const FuelChart: React.FC<FuelChartProps> = ({ fuelData, events, busId }) => {
             scale="time"
           />
           <YAxis
-            domain={["auto", "auto"]}
+            domain={[0, "auto"]}
             label={{ value: "Fuel (Litres)", angle: -90, position: "insideLeft" }}
             tick={{ fontSize: 12 }}
           />
           <Tooltip
             labelFormatter={(label) => format(new Date(label), "PPpp")}
-            formatter={(value: any, name: any, props: any) => {
-              return [`${value} L`, "Fuel Level"];
+            formatter={(_, __, props: any) => {
+              const event: EventType = props.payload?.event;
+              return [`${props.payload.fuelLevel} L`, event !== "NORMAL" ? event : "Fuel Level"];
             }}
             contentStyle={{ fontSize: "14px" }}
           />
           <Line
-          type="monotone"
-          dataKey="fuelLevel"
-          stroke="#3b82f6"
-          strokeWidth={2}
-          dot={({ cx, cy, payload }) => (
-            <circle
-              cx={cx}
-              cy={cy}
-              r={4}
-              fill={getDotColor(payload.event)}
-              stroke="#fff"
-              strokeWidth={1}
-            />
-          )}
-          activeDot={({ cx, cy }) => (
-            <circle
-              cx={cx}
-              cy={cy}
-              r={6}
-              fill="#3b82f6"
-              stroke="#000"
-              strokeWidth={1}
-            />
-          )}
-        />
+            type="monotone"
+            dataKey="fuelLevel"
+            stroke="#3b82f6"
+            strokeWidth={2}
+            dot={({ cx, cy, payload }) => {
+              const event = (payload as ParsedDataPoint).event;
+              return (
+                <circle
+                  cx={cx}
+                  cy={cy}
+                  r={4}
+                  fill={getDotColor(event)}
+                  stroke="#fff"
+                  strokeWidth={1}
+                />
+              );
+            }}
+            activeDot={({ cx, cy }) => (
+              <circle cx={cx} cy={cy} r={6} fill="#3b82f6" stroke="#000" strokeWidth={1} />
+            )}
+          />
         </LineChart>
       </ResponsiveContainer>
 

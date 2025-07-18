@@ -9,15 +9,17 @@ interface Props {
 
 const Navbar: React.FC<Props> = ({ darkMode, toggleDarkMode }) => {
   return (
-    <header className="w-full bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 shadow-sm px-6 py-4 flex items-center justify-between">
-      {/* Optional Sidebar Toggle (if needed) */}
+    <header className="w-full bg-gradient-to-r from-[#1e3a8a] to-[#2563eb] shadow-md px-6 py-4 flex items-center justify-between">
+
+      {/* Optional Sidebar Toggle  */}
       <div className="w-12">{/* space for sidebar toggle button if needed */}</div>
 
       {/* App Name */}
       <div className="text-center flex-1">
-        <h1 className="text-2xl font-signord font-extrabold text-blue-700 dark:text-blue-300">
+      <h1 className="text-2xl font-signord font-extrabold text-white">
   FuelSafe
 </h1>
+
 
 
 
@@ -26,12 +28,14 @@ const Navbar: React.FC<Props> = ({ darkMode, toggleDarkMode }) => {
       {/*  Dark Mode Toggle */}
       <div className="w-12 flex justify-end">
         <button
-          onClick={toggleDarkMode}
-          className="text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-yellow-400 transition"
-          aria-label="Toggle Dark Mode"
-        >
-          {darkMode ? <FaSun className="text-xl" /> : <FaMoon className="text-xl" />}
-        </button>
+  onClick={toggleDarkMode}
+  className="text-white hover:text-yellow-400 transition"
+  aria-label="Toggle Dark Mode"
+>
+  {darkMode ? <FaSun className="text-xl" /> : <FaMoon className="text-xl" />}
+</button>
+
+
       </div>
     </header>
   );
