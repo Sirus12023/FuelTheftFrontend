@@ -1,5 +1,6 @@
 import React from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
+
 interface MonitoredBusCardProps {
   imageUrl: string;
   regNumber: string;
@@ -9,42 +10,51 @@ interface MonitoredBusCardProps {
   fuelLevel?: number;
   sensorStatus?: "Active" | "Inactive";
   status: "normal" | "alert" | "offline";
-  onClick?: () => void; 
+  onClick?: () => void;
+  selected?: boolean; // actively selected
 }
 
 const MonitoredBusCard: React.FC<MonitoredBusCardProps> = ({
-  imageUrl,
+  imageUrl = "src/assets/temp_bus.avif",
   regNumber,
   driver,
   route,
   busId,
   fuelLevel = 0,
-  status = "normal",
   sensorStatus = "Active",
+  status = "normal",
   onClick,
+  selected = false,
 }) => {
+  const location = useLocation();
   const navigate = useNavigate();
+
+  const isFuelTheftPage = location.pathname.includes("/fuel-theft");
 
   const handleClick = () => {
     if (onClick) {
-      onClick(); // Dashboard internal click
-    } else {
-      navigate(`/fuel-theft?bus=${busId}`); // Default navigation
+      onClick();
+    } else if (!isFuelTheftPage) {
+      navigate(`/fuel-theft?bus=${busId}`);
     }
   };
- imageUrl= "src/assets/temp_bus.avif"; // Placeholder image URL
-
-  const badgeColor =
-    sensorStatus === "Active" ? "bg-green-500" : "bg-gray-400";
 
   return (
     <div
-      onClick={handleClick}
+      onClick={isFuelTheftPage ? undefined : handleClick}
       title={`Bus ID: ${busId}\nFuel Level: ${fuelLevel}%`}
-      // className="group relative flex items-center border-2 border-gray-200 bg-white rounded-2xl shadow transition-all hover:shadow-lg hover:border-blue-500 hover:scale-[1.02] cursor-pointer w-full max-w-xl"
-      className="group relative flex items-center border-2 border-gray-200 bg-white rounded-2xl shadow transition-all hover:shadow-lg hover:border-blue-500 hover:scale-[1.02] cursor-pointer w-full"
+      className={`group relative flex items-center border-2 rounded-2xl shadow transition-all w-full
+        ${isFuelTheftPage ? "cursor-default" : "cursor-pointer"}
+        ${
+          selected
+            ? "border-blue-600 ring-2 ring-blue-400 dark:ring-blue-300"
+            : "border-gray-200 dark:border-gray-700"
+        }
+        bg-white text-gray-800 dark:bg-gray-900 dark:text-white
+        hover:shadow-lg hover:border-blue-500 hover:scale-[1.02] dark:hover:border-blue-400
+      `}
     >
-      {/* Image Section */}
+      {/* Image */}
       <div className="w-32 h-32 overflow-hidden rounded-l-2xl">
         <img
           src={imageUrl}
@@ -53,19 +63,12 @@ const MonitoredBusCard: React.FC<MonitoredBusCardProps> = ({
         />
       </div>
 
-      {/* Info Section */}
+      {/* Text */}
       <div className="flex flex-col justify-between p-4 h-full flex-1">
-        <div className="text-lg font-semibold text-gray-800">{regNumber}</div>
-        <div className="text-gray-600">Driver: {driver}</div>
-        <div className="text-gray-500 text-sm mt-1">Route: {route}</div>
+        <div className="text-lg font-semibold">{regNumber}</div>
+        <div className="text-sm text-gray-600 dark:text-gray-300">Driver: {driver}</div>
+        <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">Route: {route}</div>
       </div>
-
-      {/* Sensor Badge */}
-      <span
-        className={`absolute top-2 right-2 text-xs text-white px-2 py-1 rounded-full shadow ${badgeColor}`}
-      >
-        {status}
-      </span>
     </div>
   );
 };

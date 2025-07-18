@@ -155,8 +155,11 @@ const Dashboard: React.FC = () => {
               fuelLevel={bus.fuelLevel}
               status={bus.status}
               imageUrl=""
-              onClick={() => setSelectedBus(bus.busId)}
-            />
+              onClick={() =>
+      setSelectedBus((prev) => (prev === bus.busId ? null : bus.busId))
+    }
+    selected={selectedBus === bus.busId}
+  />
           ))}
         </div>
       </div>
