@@ -1,40 +1,32 @@
 // src/components/Navbar.tsx
 import React from "react";
-import { FaMoon, FaSun } from "react-icons/fa";
+import upsrtc from "../assets/upsrtc.png"; // ✅ UPSRTC logo
 
-interface Props {
-  darkMode: boolean;
-  toggleDarkMode: () => void;
-}
 
-const Navbar: React.FC<Props> = ({ darkMode, toggleDarkMode }) => {
+
+const Navbar: React.FC = () => {
   return (
-    <header className="w-full bg-gradient-to-r from-[#1e3a8a] to-[#2563eb] shadow-md px-6 py-4 flex items-center justify-between">
-
-      {/* Optional Sidebar Toggle  */}
-      <div className="w-12">{/* space for sidebar toggle button if needed */}</div>
-
-      {/* App Name */}
-      <div className="text-center flex-1">
-      <h1 className="text-2xl font-signord font-extrabold text-white">
-  FuelSafe
-</h1>
-
-
-
-
+    <header className="w-full bg-gradient-to-r from-[#1e3a8a] to-[#2563eb] shadow-md px-4 py-3 flex items-center justify-between">
+      {/* Left: Placeholder for spacing */}
+      <div className="w-48 flex items-center gap-4">
+        {/* You can optionally show a small logo here if desired */}
       </div>
 
-      {/*  Dark Mode Toggle */}
-      <div className="w-12 flex justify-end">
-        <button
-  onClick={toggleDarkMode}
-  className="text-white hover:text-yellow-400 transition"
-  aria-label="Toggle Dark Mode"
->
-  {darkMode ? <FaSun className="text-xl" /> : <FaMoon className="text-xl" />}
-</button>
+      {/* Center: App Title */}
+      <div className="text-center flex-1">
+        <h1 className="text-2xl font-signord font-extrabold text-white">
+          FuelSafe
+        </h1>
+      </div>
 
+      {/* Right: UPSRTC Logo */}
+      <div className="flex items-center gap-4">
+        <img
+  src={upsrtc}
+  alt="UPSRTC"
+  className="h-12 max-h-12 w-auto object-contain"
+  title="UPSRTC"
+/>
 
       </div>
     </header>

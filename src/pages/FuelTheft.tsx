@@ -84,7 +84,7 @@ const FuelTheft: React.FC = () => {
 
 
   return (
-    <div className="px-6 py-12 max-w-6xl mx-auto space-y-10 font-sans text-gray-800 dark:text-gray-100">
+    <div className="px-6 py-12 max-w-6xl mx-auto space-y-10 font-sans text-gray-800 dark:text-gray-100" >
       {/* Header */}
       <div className="text-center space-y-2">
         <h2 className="text-4xl sm:text-5xl font-extrabold text-blue-900 dark:text-blue-200">

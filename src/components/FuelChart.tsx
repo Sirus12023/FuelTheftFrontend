@@ -30,6 +30,7 @@ interface FuelChartProps {
   busId: string;
 }
 
+
 const FuelChart: React.FC<FuelChartProps> = ({ fuelData, busId }) => {
   if (!fuelData.length) {
     return (
@@ -51,6 +52,17 @@ const FuelChart: React.FC<FuelChartProps> = ({ fuelData, busId }) => {
     event: normalizeEvent(d.eventType),
   }));
 
+  // Calculate total theft amount
+  let totalTheft = 0;
+  for (let i = 1; i < parsedData.length; i++) {
+    if (
+      parsedData[i].event === "THEFT" &&
+      parsedData[i - 1].fuelLevel > parsedData[i].fuelLevel
+    ) {
+      totalTheft += parsedData[i - 1].fuelLevel - parsedData[i].fuelLevel;
+    }
+  }
+
   const getDotColor = (event: EventType) => {
     switch (event) {
       case "THEFT":
@@ -68,16 +80,24 @@ const FuelChart: React.FC<FuelChartProps> = ({ fuelData, busId }) => {
 
   return (
     <section className="bg-white dark:bg-gray-800 rounded-xl shadow p-6 mt-10">
-      <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-100 mb-4">
-        📈 Fuel Level Graph – <span className="text-blue-600 dark:text-blue-300">{busId}</span>
-      </h3>
+      {/* Title & Theft Info */}
+      <div className="flex flex-wrap items-center justify-between mb-4">
+        <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-100">
+          📈 Fuel Level Graph – <span className="text-blue-600 dark:text-blue-300">{busId}</span>
+        </h3>
+        <div className="bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-200 px-3 py-1.5 rounded-lg text-sm font-medium">
+          🛑 Total Fuel Theft: <span className="font-bold">{totalTheft.toFixed(2)} L</span>
+        </div>
+      </div>
 
+      {/* Time Range Summary */}
       <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
         Showing data from{" "}
         <strong>{format(new Date(fuelData[0].timestamp), "PPpp")}</strong> to{" "}
         <strong>{format(new Date(fuelData[fuelData.length - 1].timestamp), "PPpp")}</strong>
       </p>
 
+      {/* Chart */}
       <ResponsiveContainer width="100%" height={300}>
         <LineChart data={parsedData} margin={{ top: 10, right: 30, left: 10, bottom: 10 }}>
           <CartesianGrid stroke={isDark ? "#374151" : "#ccc"} strokeDasharray="3 3" />
@@ -152,4 +172,3 @@ const FuelChart: React.FC<FuelChartProps> = ({ fuelData, busId }) => {
 };
 
 export default FuelChart;
-

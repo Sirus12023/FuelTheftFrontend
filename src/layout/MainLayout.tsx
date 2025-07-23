@@ -1,3 +1,4 @@
+// src/layouts/MainLayout.tsx
 import React, { useState, useEffect } from "react";
 import Sidebar from "../components/Sidebar";
 import Navbar from "../components/Navbar";
@@ -6,21 +7,15 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [collapsed, setCollapsed] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
 
-  // Initial load - check saved preference or system preference
   useEffect(() => {
     const saved = localStorage.getItem("darkMode");
     const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
     const shouldEnableDark = saved === "true" || (!saved && prefersDark);
 
     setDarkMode(shouldEnableDark);
-    if (shouldEnableDark) {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
+    document.documentElement.classList.toggle("dark", shouldEnableDark);
   }, []);
 
-  // Toggle dark mode on button click
   const toggleDarkMode = () => {
     setDarkMode((prev) => {
       const next = !prev;
@@ -35,10 +30,12 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       <Sidebar
         collapsed={collapsed}
         toggleCollapsed={() => setCollapsed((prev) => !prev)}
+        darkMode={darkMode}
+        toggleDarkMode={toggleDarkMode}
       />
 
       <div className={`flex-1 transition-all duration-300 ${collapsed ? "ml-16" : "ml-64"}`}>
-        <Navbar darkMode={darkMode} toggleDarkMode={toggleDarkMode} />
+        <Navbar />
         <main className="p-6">{children}</main>
       </div>
     </div>
