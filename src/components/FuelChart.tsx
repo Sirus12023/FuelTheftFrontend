@@ -10,12 +10,14 @@ import {
 } from "recharts";
 import { format } from "date-fns";
 
+// Backend now uses "type" for event type and "fuelChange" for change in fuel (see /alerts and /fuel endpoints)
 type EventType = "REFUEL" | "THEFT" | "DROP" | "NORMAL";
 
 interface RawReading {
   timestamp: string;
   fuelLevel: number;
-  eventType?: string;
+  type?: string; // backend: "REFUEL", "THEFT", "DROP", etc.
+  fuelChange?: number; // backend: change in fuel (litres), can be positive or negative
   description?: string;
 }
 
@@ -23,6 +25,8 @@ interface ParsedDataPoint {
   time: number;
   fuelLevel: number;
   event: EventType;
+  fuelChange?: number;
+  description?: string;
 }
 
 interface FuelChartProps {
@@ -30,8 +34,9 @@ interface FuelChartProps {
   busId: string;
 }
 
-const normalizeEvent = (rawEvent?: string): EventType => {
-  const upper = rawEvent?.toUpperCase();
+// Normalize backend event type to our EventType
+const normalizeEvent = (rawType?: string): EventType => {
+  const upper = rawType?.toUpperCase();
   return (["REFUEL", "THEFT", "DROP"].includes(upper || "") ? upper : "NORMAL") as EventType;
 };
 
@@ -50,21 +55,34 @@ const FuelChart: React.FC<FuelChartProps> = ({ fuelData, busId }) => {
     );
   }
 
+  // Parse and compute total theft using backend's "type" and "fuelChange"
   const { parsedData, totalTheft } = useMemo(() => {
-    const parsed = fuelData.map((d) => ({
+    const parsed: ParsedDataPoint[] = fuelData.map((d) => ({
       time: new Date(d.timestamp).getTime(),
       fuelLevel: d.fuelLevel,
-      event: normalizeEvent(d.eventType),
+      event: normalizeEvent(d.type),
+      fuelChange: d.fuelChange,
+      description: d.description,
     }));
 
+    // Compute total theft using backend's "fuelChange" for THEFT events
     let theft = 0;
-    for (let i = 1; i < parsed.length; i++) {
-      if (
-        parsed[i].event === "THEFT" &&
-        parsed[i - 1].fuelLevel > parsed[i].fuelLevel
-      ) {
-        const drop = parsed[i - 1].fuelLevel - parsed[i].fuelLevel;
-        if (drop > 0.2) theft += drop;
+    for (let i = 0; i < parsed.length; i++) {
+      if (parsed[i]?.event === "THEFT") {
+        // Prefer backend's fuelChange if present and negative
+        const fuelChange = parsed[i]?.fuelChange;
+        if (typeof fuelChange === "number" && fuelChange < -0.2) {
+          theft += Math.abs(fuelChange);
+        } else if (
+          i > 0 &&
+          typeof parsed[i - 1]?.fuelLevel === "number" &&
+          typeof parsed[i]?.fuelLevel === "number" &&
+          parsed[i - 1].fuelLevel > parsed[i].fuelLevel
+        ) {
+          // Fallback: compute drop if backend didn't provide fuelChange
+          const drop = parsed[i - 1].fuelLevel - parsed[i].fuelLevel;
+          if (drop > 0.2) theft += drop;
+        }
       }
     }
 
@@ -84,7 +102,7 @@ const FuelChart: React.FC<FuelChartProps> = ({ fuelData, busId }) => {
     }
   };
 
-  const isDark = document.documentElement.classList.contains("dark");
+  const isDark = typeof document !== "undefined" && document.documentElement.classList.contains("dark");
 
   return (
     <section className="bg-white dark:bg-gray-800 rounded-xl shadow p-6 mt-10">
@@ -121,16 +139,27 @@ const FuelChart: React.FC<FuelChartProps> = ({ fuelData, busId }) => {
           />
           <Tooltip
             labelFormatter={(label) => format(new Date(label), "PPpp")}
-          formatter={(value: number, name: string, props: any) => {
-  const event = props?.payload?.event || "NORMAL";
-  const description = props?.payload?.description;
-  if (event !== "NORMAL") {
-    return [`${value} L`, `${event}: ${description || "Detected Event"}`];
-  }
-  return [`${value} L`, "Fuel Level"];
-}}
-
-
+            formatter={(
+              value: number,
+              name: string,
+              props: any
+            ) => {
+              const event = props?.payload?.event || "NORMAL";
+              const description = props?.payload?.description;
+              const fuelChange = props?.payload?.fuelChange;
+              if (event !== "NORMAL") {
+                let eventLabel = event.charAt(0) + event.slice(1).toLowerCase();
+                let changeStr =
+                  typeof fuelChange === "number"
+                    ? ` (${fuelChange > 0 ? "+" : ""}${fuelChange.toFixed(2)} L)`
+                    : "";
+                return [
+                  `${value} L`,
+                  `${eventLabel}${changeStr}: ${description || "Detected Event"}`,
+                ];
+              }
+              return [`${value} L`, "Fuel Level"];
+            }}
             contentStyle={{
               backgroundColor: isDark ? "#1f2937" : "#fff",
               border: "none",

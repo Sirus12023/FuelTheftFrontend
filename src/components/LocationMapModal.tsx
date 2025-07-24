@@ -4,14 +4,15 @@ import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import { Dialog } from "@headlessui/react";
 import "leaflet/dist/leaflet.css";
 
+// Backend now uses "latitude" and "longitude" (not "lat" and "long") for location fields
 interface Props {
-  lat: number;
-  long: number;
+  latitude: number;
+  longitude: number;
   isOpen: boolean;
   onClose: () => void;
 }
 
-const LocationMapModal: React.FC<Props> = ({ lat, long, isOpen, onClose }) => {
+const LocationMapModal: React.FC<Props> = ({ latitude, longitude, isOpen, onClose }) => {
   return (
     <Dialog open={isOpen} onClose={onClose} className="relative z-50">
       {/* Background Overlay */}
@@ -28,14 +29,14 @@ const LocationMapModal: React.FC<Props> = ({ lat, long, isOpen, onClose }) => {
             {/* Map */}
             <div className="h-[300px] rounded overflow-hidden">
               <MapContainer
-                center={[lat, long]}
+                center={[latitude, longitude]}
                 zoom={13}
                 style={{ height: "100%", width: "100%" }}
               >
                 <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                <Marker position={[lat, long]}>
+                <Marker position={[latitude, longitude]}>
                   <Popup>
-                    Latitude: {lat.toFixed(4)}, Longitude: {long.toFixed(4)}
+                    Latitude: {latitude.toFixed(4)}, Longitude: {longitude.toFixed(4)}
                   </Popup>
                 </Marker>
               </MapContainer>

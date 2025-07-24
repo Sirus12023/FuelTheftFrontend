@@ -35,70 +35,54 @@ const getIcon = (name: string) => {
 };
 
 const StatCards: React.FC<Props> = ({ title, icon, color, apiPath }) => {
-  const [count, setCount] = useState<number | null>(null);
-  const [displayedCount, setDisplayedCount] = useState<number>(0);
+  const [count, setCount] = useState<number>(0);
   const [range, setRange] = useState<string>("today");
   const [customStart, setCustomStart] = useState<string>("");
   const [customEnd, setCustomEnd] = useState<string>("");
 
   useEffect(() => {
-  const fetchCount = async () => {
-    const { startDate, endDate } =
-      range === "custom"
-        ? {
-            startDate: customStart ? new Date(customStart) : undefined,
-            endDate: customEnd ? new Date(customEnd) : undefined,
-          }
-        : getDateRange(range);
+    const fetchCount = async () => {
+      let startDate: Date | undefined;
+      let endDate: Date | undefined;
 
-    try {
-      // Parse query params from apiPath if any
-      let url = `${API_BASE_URL}${apiPath}`;
-      const params: Record<string, any> = {};
-
-      // Extract and parse query string from apiPath
-      if (apiPath.includes("?")) {
-        const [base, query] = apiPath.split("?");
-        url = `${API_BASE_URL}${base}`;
-        query.split("&").forEach((kv) => {
-          const [key, value] = kv.split("=");
-          params[key] = value;
-        });
+      if (range === "custom") {
+        startDate = customStart ? new Date(customStart) : undefined;
+        endDate = customEnd ? new Date(customEnd) : undefined;
+      } else {
+        const rangeObj = getDateRange(range);
+        startDate = rangeObj?.startDate;
+        endDate = rangeObj?.endDate;
       }
 
-      // Add time filters only if present
-      if (startDate) params.startDate = startDate.toISOString();
-      if (endDate) params.endDate = endDate.toISOString();
+      try {
+        // Parse query params from apiPath if any
+        let url = `${API_BASE_URL}${apiPath}`;
+        const params: Record<string, any> = {};
 
-      const res = await axios.get<{ count: number }>(url, { params });
-      setCount(res.data?.count ?? 0);
-    } catch (err) {
-      console.error(`Error fetching ${title} count`, err);
-      setCount(0);
-    }
-  };
+        // Extract and parse query string from apiPath
+        if (apiPath.includes("?")) {
+          const [base, query] = apiPath.split("?");
+          url = `${API_BASE_URL}${base}`;
+          query.split("&").forEach((kv) => {
+            const [key, value] = kv.split("=");
+            params[key] = value;
+          });
+        }
 
-  fetchCount();
-}, [range, customStart, customEnd, apiPath, title]);
+        // Add time filters only if present
+        if (startDate) params.startDate = startDate.toISOString();
+        if (endDate) params.endDate = endDate.toISOString();
 
+        const res = await axios.get<{ count: number }>(url, { params });
+        setCount(res.data?.count ?? 0);
+      } catch (err) {
+        console.error(`Error fetching ${title} count`, err);
+        setCount(0);
+      }
+    };
 
-  useEffect(() => {
-    if (count === null) return;
-
-    let start = displayedCount;
-    const end = count;
-    const duration = 500;
-    const stepTime = Math.abs(Math.floor(duration / (end - start || 1)));
-    const increment = end > start ? 1 : -1;
-
-    const timer = setInterval(() => {
-      start += increment;
-      setDisplayedCount(start);
-      if (start === end) clearInterval(timer);
-    }, stepTime);
-
-    return () => clearInterval(timer);
-  }, [count]);
+    fetchCount();
+  }, [range, customStart, customEnd, apiPath, title]);
 
   return (
     <div
@@ -141,7 +125,7 @@ const StatCards: React.FC<Props> = ({ title, icon, color, apiPath }) => {
 
       <h3 className="text-sm mt-2">{title}</h3>
       <p className="text-3xl font-bold">
-        {count !== null ? <CountUp end={displayedCount} duration={1} /> : "—"}
+        <CountUp end={count} duration={1} />
       </p>
     </div>
   );

@@ -1,6 +1,11 @@
 import React from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
+// Backend: status is "normal" | "alert" | "offline"
+// Backend: fuelLevel is a number (liters, can be 0)
+// Backend: driver and route are strings (may be "Unknown")
+// Backend: regNumber is registrationNo from backend
+
 interface MonitoredBusCardProps {
   imageUrl: string;
   regNumber: string;
@@ -8,7 +13,6 @@ interface MonitoredBusCardProps {
   route: string;
   busId: string;
   fuelLevel?: number;
-  sensorStatus?: "Active" | "Inactive";
   status: "normal" | "alert" | "offline";
   onClick?: () => void;
   selected?: boolean;
@@ -21,7 +25,6 @@ const MonitoredBusCard: React.FC<MonitoredBusCardProps> = ({
   route,
   busId,
   fuelLevel = 0,
-  sensorStatus = "Active",
   status = "normal",
   onClick,
   selected = false,
@@ -29,6 +32,7 @@ const MonitoredBusCard: React.FC<MonitoredBusCardProps> = ({
   const location = useLocation();
   const navigate = useNavigate();
 
+  // Only allow click-to-select on dashboard, not on /fuel-theft page
   const isFuelTheftPage = location.pathname.includes("/fuel-theft");
 
   const handleClick = () => {
@@ -39,6 +43,7 @@ const MonitoredBusCard: React.FC<MonitoredBusCardProps> = ({
     }
   };
 
+  // Status badge color based on backend status
   const getStatusBadge = () => {
     switch (status) {
       case "alert":
@@ -85,7 +90,7 @@ const MonitoredBusCard: React.FC<MonitoredBusCardProps> = ({
         <div className="flex justify-between items-center mt-3">
           {/* Fuel Level */}
           <div className="text-xs text-blue-600 dark:text-blue-300 font-medium">
-            ⛽ Fuel: {fuelLevel.toFixed(1)} L
+            ⛽ Fuel: {typeof fuelLevel === "number" ? fuelLevel.toFixed(1) : "0.0"} L
           </div>
 
           {/* Status Badge */}
@@ -101,4 +106,3 @@ const MonitoredBusCard: React.FC<MonitoredBusCardProps> = ({
 };
 
 export default MonitoredBusCard;
-

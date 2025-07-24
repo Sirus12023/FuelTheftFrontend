@@ -10,14 +10,15 @@ import FuelChart from "../components/FuelChart";
 import MonitoredBusCard from "../components/MonitoredBusCard";
 import { getDateRange } from "../utils/dateRangeFromTimeOption";
 import FuelStatsGrid from "../components/FuelStatsGrid";
+import { markFuelEvents } from "../utils/markFuelEvents"; // <-- Import event marking utility
 
-
+// Backend: FuelUsageStats keys must match backend response
 interface FuelUsageStats {
-  totalFuelConsumed: number;
-  totalFuelStolen: number;
-  totalFuelRefueled: number;
-  distanceTravelled: number;
-  fuelEfficiency: number;
+  total_fuel_consumed: number;
+  total_fuel_stolen: number;
+  total_fuel_refueled: number;
+  distance_traveled: number;
+  fuel_efficiency: number;
 }
 
 const FuelTheft: React.FC = () => {
@@ -38,7 +39,9 @@ const FuelTheft: React.FC = () => {
   const [events, setEvents] = useState<any[]>([]);
   const [busDetails, setBusDetails] = useState<any>(null);
   const [fuelStats, setFuelStats] = useState<FuelUsageStats | null>(null);
+  const [noData, setNoData] = useState(false);
 
+  // Ensure that when timeRange, startDate, or endDate changes, the data is refetched and the chart updates.
   useEffect(() => {
     if (initialBus) {
       setSelectedBus(initialBus);
@@ -47,14 +50,31 @@ const FuelTheft: React.FC = () => {
   }, [initialBus]);
 
   useEffect(() => {
-    if (!selectedBus) return;
+    if (!selectedBus) {
+      setFuelData([]);
+      setEvents([]);
+      setBusDetails(null);
+      setFuelStats(null);
+      setNoData(false);
+      return;
+    }
 
+    // Always recompute the date range when timeRange or custom dates change
     const { startDate: computedStart, endDate: computedEnd } = getDateRange(timeRange);
 
     const fetchBusData = async () => {
       try {
+        // Backend: Use /vehicles/:id/details?include=readings,alerts,events
         const res = await axios.get(
-          `${API_BASE_URL}/vehicles/${selectedBus}/details?include=readings,alerts,events`
+          `${API_BASE_URL}/vehicles/${selectedBus}/details`,
+          {
+            params: {
+              include: "readings,alerts,events",
+              // Always use the latest computed date range for the query
+              from: (computedStart ?? startDate ?? new Date()).toISOString(),
+              to: (computedEnd ?? endDate ?? new Date()).toISOString(),
+            },
+          }
         );
 
         const data = res.data as {
@@ -63,49 +83,81 @@ const FuelTheft: React.FC = () => {
           registrationNo?: string;
           driver?: { name?: string };
           route?: { name?: string };
-          sensor?: { isActive?: boolean };
+          sensor?: {
+            alerts?: any[];
+            readings?: any[];
+          };
         };
-        const alerts = data.alerts || [];
-        const readings = (data.readings || []).map((r: any) => {
+
+        // Backend: alerts and readings are separate, match by timestamp if needed
+        const alerts = (data.sensor && Array.isArray(data.sensor.alerts)) ? data.sensor.alerts : (data.alerts || []);
+        const readingsRaw = (data.sensor && Array.isArray(data.sensor.readings)) ? data.sensor.readings : (data.readings || []);
+
+        // Use markFuelEvents to ensure eventType is always set and normalized
+        const readingsWithEvents = readingsRaw.map((r: any) => {
           const matchingAlert = alerts.find((a: any) => a.timestamp === r.timestamp);
           return {
             ...r,
-            eventType: matchingAlert?.type?.toUpperCase() || "NORMAL",
+            eventType: matchingAlert?.type?.toUpperCase() || r.eventType?.toUpperCase() || undefined,
           };
         });
+        const readings = markFuelEvents(readingsWithEvents);
 
         setFuelData(readings);
-        setEvents(readings.filter((r: any) => r.eventType !== "NORMAL"));
-        const sensorRes = await axios.get(`${API_BASE_URL}/sensor`, {
-  params: { busId: selectedBus },
-});
+        setEvents(readings.filter((r: any) => r.eventType && r.eventType !== "NORMAL"));
 
-const sensors = Array.isArray(sensorRes.data) ? sensorRes.data : [];
-const allSensorsActive = sensors.every((s: any) => s.isActive);
+        // If there is no data in the chosen time range, set noData to true
+        if (!readings || readings.length === 0) {
+          setNoData(true);
+        } else {
+          setNoData(false);
+        }
 
-setBusDetails({
-  registrationNo: data.registrationNo,
-  driver: data.driver?.name || "Unassigned",
-  route: data.route?.name || "Unknown",
-  currentFuelLevel: data.readings?.[data.readings.length - 1]?.fuelLevel ?? 0,
-  status: allSensorsActive ? "normal" : "offline",
-});
+        // Backend: /sensor?busId=... returns array of sensors
+        let allSensorsActive = true;
+        try {
+          const sensorRes = await axios.get(`${API_BASE_URL}/sensor`, {
+            params: { busId: selectedBus },
+          });
+          const sensors = Array.isArray(sensorRes.data) ? sensorRes.data : [];
+          allSensorsActive = sensors.length === 0 ? true : sensors.every((s: any) => s.isActive);
+        } catch (e) {
+          // If sensor endpoint fails, assume normal
+          allSensorsActive = true;
+        }
 
+        setBusDetails({
+          registrationNo: data.registrationNo,
+          driver: data.driver?.name || "Unassigned",
+          route: data.route?.name || "Unknown",
+          currentFuelLevel: data.readings?.[data.readings.length - 1]?.fuelLevel ?? 0,
+          status: allSensorsActive ? "normal" : "offline",
+        });
 
-        const usageRes = await axios.get<FuelUsageStats>(`${API_BASE_URL}/fuel-usage`, {
-  params: {
-    busId: selectedBus,
-    fromDate: (computedStart ?? new Date()).toISOString(),
-    toDate: (computedEnd ?? new Date()).toISOString(),
-  },
-});
-setFuelStats(usageRes.data);
+        // Backend: /fuel-usage expects busId, fromDate, toDate, returns FuelUsageStats
+        const usageRes = await axios.get(`${API_BASE_URL}/fuelusage`, {
+          params: {
+            busId: selectedBus,
+            fromDate: (computedStart ?? startDate ?? new Date()).toISOString(),
+            toDate: (computedEnd ?? endDate ?? new Date()).toISOString(),
+          },
+        });
+        setFuelStats(usageRes.data as FuelUsageStats);
+        // Optionally log for debugging
+        // console.log("Readings:", readings);
+        // console.log("FuelStats:", usageRes.data);
       } catch (error) {
         console.error("Error fetching bus fuel data or fuel stats:", error);
+        setFuelData([]);
+        setEvents([]);
+        setBusDetails(null);
+        setFuelStats(null);
+        setNoData(false);
       }
     };
 
     fetchBusData();
+    // Refetch whenever selectedBus, timeRange, startDate, endDate, or showCustom changes
   }, [selectedBus, timeRange, startDate, endDate, showCustom]);
 
   return (
@@ -138,7 +190,7 @@ setFuelStats(usageRes.data);
           showStartPicker={showStartPicker}
           setShowStartPicker={setShowStartPicker}
           showEndPicker={showEndPicker}
-          setEndPicker={setShowEndPicker}
+          setShowEndPicker={setShowEndPicker}
         />
       </div>
 
@@ -158,8 +210,23 @@ setFuelStats(usageRes.data);
         </div>
       )}
 
+      {/* No data in time range placeholder */}
+      {selectedBus && noData && (
+        <div className="bg-gradient-to-br from-white to-blue-50 dark:from-gray-800 dark:to-gray-700 border dark:border-gray-600 rounded-xl shadow-md text-center py-24 px-4 text-gray-600 dark:text-gray-300 animate-fade-in">
+          <div className="mb-4">
+            <svg className="h-16 w-16 text-blue-300 mx-auto dark:text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <h3 className="text-2xl font-semibold text-gray-700 dark:text-gray-100 mb-2">No Data Available</h3>
+          <p className="max-w-md mx-auto text-base">
+            No fuel data found for the selected bus and time range. Try a different time range or bus.
+          </p>
+        </div>
+      )}
+
       {/* Bus Info */}
-      {selectedBus && busDetails && (
+      {selectedBus && busDetails && !noData && (
         <MonitoredBusCard
           busId={selectedBus}
           regNumber={busDetails.registrationNo}
@@ -172,11 +239,10 @@ setFuelStats(usageRes.data);
       )}
 
       {/* Fuel Chart */}
-      {selectedBus && (
+      {selectedBus && !noData && (
         <>
           <FuelChart
             fuelData={fuelData}
-            events={events}
             busId={selectedBus}
           />
 
@@ -189,122 +255,3 @@ setFuelStats(usageRes.data);
 };
 
 export default FuelTheft;
-
-
-
-
-
-
-
-
-
-// // FuelTheft.tsx
-// import React, { useEffect, useState } from "react";
-// import { useLocation } from "react-router-dom";
-// import BusTimeFilter from "../components/BusTimeFilter";
-// import FuelChart from "../components/FuelChart";
-// import axios from "axios";
-// import { API_BASE_URL } from "../config";
-
-
-// const FuelTheft: React.FC = () => {
-//   const location = useLocation();
-//   const query = new URLSearchParams(location.search);
-//   const initialBus = query.get("bus");
-
-//   const [selectedBus, setSelectedBus] = useState<string | null>(null);
-//   const [search, setSearch] = useState("");
-//   const [timeRange, setTimeRange] = useState("Last 24 hours");
-
-//   // Date range controls
-//   const [showCustom, setShowCustom] = useState(false);
-//   const [startDate, setStartDate] = useState<Date | undefined>();
-//   const [endDate, setEndDate] = useState<Date | undefined>();
-//   const [showStartPicker, setShowStartPicker] = useState(true);
-//   const [showEndPicker, setShowEndPicker] = useState(true);
-
-//   // Data states
-//   const [fuelData, setFuelData] = useState([]);
-//   const [events, setEvents] = useState([]);
-
-//   // Apply initial bus from URL
-//   useEffect(() => {
-//     if (initialBus) {
-//       setSelectedBus(initialBus);
-//     }
-//   }, [initialBus]);
-
-//   // Fetch fuel data when bus is selected
-//  useEffect(() => {
-//   if (!selectedBus) return;
-
-//   const fetchBusData = async () => {
-//   try {
-//     const params: any = {};
-//     if (startDate) params.start = startDate.toISOString();
-//     if (endDate) params.end = endDate.toISOString();
-
-//     // const res = await axios.get(`${API_BASE_URL}/buses/${selectedBus}/details`, { params });
-//     const res = await axios.get(`${API_BASE_URL}/buses/${selectedBus}/details`, {
-//   params: {
-//     timeRange,
-//     startDate: startDate?.toISOString(),
-//     endDate: endDate?.toISOString(),
-//   },
-// });
-
-//     const rawReadings = res.data.readings || [];
-
-//     const readings = rawReadings.map((r: any) => ({
-//       ...r,
-//       eventType: r.eventType?.toUpperCase(),
-//     }));
-
-//     setFuelData(readings);
-//     setEvents(readings.filter((r: any) => r.eventType && r.eventType !== "NORMAL"));
-//   } catch (error) {
-//     console.error("Error fetching bus fuel data:", error);
-//   }
-// };
-
-
-//   fetchBusData();
-// }, [selectedBus, timeRange, startDate, endDate]);
-
-
-//   return (
-//     <div className="px-6 py-8 max-w-5xl mx-auto space-y-10">
-//       <h2 className="text-3xl font-bold text-gray-800">🚨 Fuel Theft Monitoring</h2>
-
-//       <BusTimeFilter
-//         busSearch={search}
-//         setBusSearch={setSearch}
-//         selectedBus={selectedBus}
-//         setSelectedBus={setSelectedBus}
-//         timeRange={timeRange}
-//         setTimeRange={setTimeRange}
-//         showCustom={showCustom}
-//         setShowCustom={setShowCustom}
-//         startDate={startDate}
-//         setStartDate={setStartDate}
-//         endDate={endDate}
-//         setEndDate={setEndDate}
-//         showStartPicker={showStartPicker}
-//         setShowStartPicker={setShowStartPicker}
-//         showEndPicker={showEndPicker}
-//         setShowEndPicker={setShowEndPicker}
-//       />
-
-//       {/* Show chart only when bus is selected */}
-//       {selectedBus && (
-//         <FuelChart
-//           fuelData={fuelData}
-//           events={events}
-//           busId={selectedBus}
-//         />
-//       )}
-//     </div>
-//   );
-// };
-
-// export default FuelTheft;

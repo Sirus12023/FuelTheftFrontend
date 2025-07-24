@@ -1,6 +1,13 @@
 // components/BusSelector.tsx
 import React, { useEffect, useState } from "react";
 import axios from "axios";
+import { API_BASE_URL } from "../config"; // Use API_BASE_URL for backend requests
+
+interface Bus {
+  id: string;
+  registrationNo: string;
+  [key: string]: any; // allow extra fields
+}
 
 interface Props {
   search: string;
@@ -15,18 +22,16 @@ const BusSelector: React.FC<Props> = ({
   selectedBus,
   setSelectedBus,
 }) => {
-  const [busList, setBusList] = useState<string[]>([]);
+  const [busList, setBusList] = useState<Bus[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
 
   useEffect(() => {
     const fetchBuses = async () => {
       try {
-        const res = await axios.get<{ id: string; registrationNo: string }[]>(
-          "/vehicles"
-        );
+        // Use API_BASE_URL and correct endpoint
+        const res = await axios.get<Bus[]>(`${API_BASE_URL}/vehicles`);
         const buses = res.data || [];
-        const regNos = buses.map((bus) => bus.registrationNo);
-        setBusList(regNos);
+        setBusList(buses);
       } catch (err) {
         console.error("Error fetching buses:", err);
       }
@@ -35,11 +40,15 @@ const BusSelector: React.FC<Props> = ({
     fetchBuses();
   }, []);
 
-  const filtered = search.length === 0
-    ? []
-    : busList.filter((bus) =>
-        bus.toLowerCase().includes(search.toLowerCase())
-      );
+  // Filter by registrationNo (case-insensitive)
+  const filtered =
+    search.length === 0
+      ? []
+      : busList.filter((bus) =>
+          bus.registrationNo
+            .toLowerCase()
+            .includes(search.toLowerCase())
+        );
 
   return (
     <section className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow border border-gray-200 dark:border-gray-700 space-y-4">
@@ -56,7 +65,7 @@ const BusSelector: React.FC<Props> = ({
             setSelectedBus(null);
             setShowSuggestions(true);
           }}
-          placeholder="Search by bus number..."
+          placeholder="Search by registration number..."
           onFocus={() => setShowSuggestions(true)}
           onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
           className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-100 rounded-md px-4 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -66,15 +75,15 @@ const BusSelector: React.FC<Props> = ({
           <ul className="absolute z-20 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 mt-1 rounded-md shadow-md max-h-48 overflow-y-auto">
             {filtered.map((bus) => (
               <li
-                key={bus}
+                key={bus.id}
                 onClick={() => {
-                  setSelectedBus(bus);
-                  setSearch(bus);
+                  setSelectedBus(bus.registrationNo);
+                  setSearch(bus.registrationNo);
                   setShowSuggestions(false);
                 }}
                 className="px-4 py-2 cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900 text-sm"
               >
-                {bus}
+                {bus.registrationNo}
               </li>
             ))}
           </ul>

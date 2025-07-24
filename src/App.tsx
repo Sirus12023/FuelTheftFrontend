@@ -1,16 +1,19 @@
 // src/App.tsx
 import "react-day-picker/dist/style.css";
-import "leaflet/dist/leaflet.css"; // ✅ Ensure map components work correctly
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import "leaflet/dist/leaflet.css";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import Dashboard from "./pages/Dashboard";
 import FuelTheft from "./pages/FuelTheft";
 import BusEvents from "./pages/BusEvents";
 import MainLayout from "./layout/MainLayout";
 
+// If backend root should redirect to dashboard, or if backend expects a different base path, adjust here
 function App() {
   return (
     <Router>
       <Routes>
+        {/* If backend expects dashboard at /dashboard, redirect / to /dashboard */}
+        {/* <Route path="/" element={<Navigate to="/dashboard" replace />} /> */}
         <Route
           path="/"
           element={
@@ -35,7 +38,7 @@ function App() {
             </MainLayout>
           }
         />
-        {/* Optional: Add fallback route */}
+        {/* Fallback route for any undefined path */}
         <Route
           path="*"
           element={

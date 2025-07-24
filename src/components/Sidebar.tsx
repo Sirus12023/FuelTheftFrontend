@@ -7,10 +7,12 @@ import {
   FaMoon,
   FaBars,
 } from "react-icons/fa";
-
 import { NavLink } from "react-router-dom";
 import logoFull3 from "../assets/logoFull3.png";
 import logoIcon4 from "../assets/logoIcon4.png";
+
+// Sidebar does not require backend data as per current backend design.
+// If backend provides organization name, logo, or navigation structure in future, update here accordingly.
 
 interface SidebarProps {
   collapsed: boolean;
@@ -25,6 +27,8 @@ const Sidebar: React.FC<SidebarProps> = ({
   darkMode,
   toggleDarkMode,
 }) => {
+  // Navigation links are static as per current backend design.
+  // If backend provides navigation structure, update this accordingly.
   const links = [
     { to: "/", label: "Dashboard", icon: <FaHome /> },
     { to: "/fuel-theft", label: "Fuel Theft", icon: <FaBusAlt /> },

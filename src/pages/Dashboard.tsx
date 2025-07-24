@@ -10,16 +10,32 @@ import StatCards from "../components/StatCards";
 import FuelStatsGrid from "../components/FuelStatsGrid";
 import { BusFront } from "lucide-react";
 import CountUp from "react-countup";
+import busImage from "../assets/bus1.jpg";
 
+// --- Type Definitions ---
 interface Reading {
+  id: string;
   timestamp: string;
   fuelLevel: number;
   eventType?: string;
   description?: string;
-  type?: string; // Added to fix compile error
+}
+
+interface Alert {
+  id: string;
+  timestamp: string;
+  type: string;
+  description: string;
 }
 
 interface Bus {
+  id: string;
+  registrationNo: string;
+  driver?: string;
+  route?: string;
+}
+
+interface BusCard {
   busId: string;
   registrationNo: string;
   driverName: string;
@@ -28,9 +44,11 @@ interface Bus {
   status: "normal" | "alert" | "offline";
 }
 
-interface DashboardStats {
-  totalBuses: number;
-  topBuses: Bus[];
+interface BusDetails {
+  readings: Reading[];
+  alerts?: Alert[];
+  driver?: { name: string };
+  route?: { name: string };
 }
 
 interface FuelUsageStats {
@@ -38,190 +56,232 @@ interface FuelUsageStats {
   totalFuelStolen: number;
   totalFuelRefueled: number;
   distanceTravelled: number;
-  fuelEfficiency: number;
+  fuelEfficiency: number; // corrected: should not be nullable
 }
 
-interface BusDetailsResponse {
-  readings: Reading[];
-  alerts?: Reading[];
-}
-
+// --- Component Start ---
 const Dashboard: React.FC = () => {
-  const [stats, setStats] = useState<DashboardStats>({
-    totalBuses: 0,
-    topBuses: [],
-  });
-
+  const [topBuses, setTopBuses] = useState<BusCard[]>([]);
+  const [totalBuses, setTotalBuses] = useState(0);
   const [selectedBus, setSelectedBus] = useState<string | null>(null);
   const [fuelData, setFuelData] = useState<Reading[]>([]);
-  const [events, setEvents] = useState<Reading[]>([]);
+  const [events, setEvents] = useState<Alert[]>([]);
   const [fuelStats, setFuelStats] = useState<FuelUsageStats | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
+  // --- Fetch All Buses & Status ---
   useEffect(() => {
     const fetchDashboard = async () => {
       try {
+        setLoading(true);
         const res = await axios.get<Bus[]>(`${API_BASE_URL}/vehicles`);
         const buses = res.data;
 
-        const topBuses = await Promise.all(
-          buses.map(async (bus: any) => {
+        const enriched: BusCard[] = await Promise.all(
+          buses.map(async (bus) => {
             try {
-              const detailRes = await axios.get<BusDetailsResponse>(
-  `${API_BASE_URL}/vehicles/${bus.id}/details?include=readings`
-);
-const readings = detailRes.data.readings || [];
-              const latestFuel = readings.at(-1)?.fuelLevel ?? 0;
-
-              const sensorRes = await axios.get(`${API_BASE_URL}/sensor`, {
-                params: { busId: bus.id },
-              });
-              const sensors = Array.isArray(sensorRes.data) ? sensorRes.data : [];
-              const allSensorsActive = sensors.every((s: any) => s.isActive);
-
+              // Fetch bus details to get latest fuel level and sensor status
+              const detailsRes = await axios.get<any>(
+                `${API_BASE_URL}/vehicles/${bus.id}/details?include=readings,alerts,sensor`
+              );
+              const details = detailsRes.data;
+              // readings can be under sensor.readings or details.readings
+              let readings = [];
+              if (details.sensor && Array.isArray(details.sensor.readings)) {
+                readings = details.sensor.readings;
+              } else if (Array.isArray(details.readings)) {
+                readings = details.readings;
+              }
+              const latestFuel = readings.length > 0 ? readings[readings.length - 1].fuelLevel : 0;
+              // sensor status
+              let allSensorsActive = true;
+              if (details.sensor) {
+                allSensorsActive = details.sensor.isActive !== false;
+              }
               return {
                 busId: bus.id,
                 registrationNo: bus.registrationNo,
-                driverName: bus.driver,
-                routeName: bus.route,
+                driverName: bus.driver || details.driver?.name || "Unknown",
+                routeName: bus.route || details.route?.name || "Unknown",
                 fuelLevel: latestFuel,
-                status: allSensorsActive ? ("normal" as "normal" | "alert" | "offline") : ("offline" as "normal" | "alert" | "offline"),
-              };
+                status: allSensorsActive ? "normal" : "offline",
+              } as BusCard;
             } catch {
               return {
                 busId: bus.id,
                 registrationNo: bus.registrationNo,
-                driverName: bus.driver,
-                routeName: bus.route,
+                driverName: bus.driver || "Unknown",
+                routeName: bus.route || "Unknown",
                 fuelLevel: 0,
-                status: "offline" as "normal" | "alert" | "offline",
-              };
+                status: "offline",
+              } as BusCard;
             }
           })
         );
 
-        setStats({ totalBuses: buses.length, topBuses });
+        setTopBuses(enriched);
+        setTotalBuses(buses.length);
+        setError(null);
       } catch (err) {
-        console.error("Error fetching dashboard data:", err);
+        console.error("Dashboard fetch error:", err);
+        setError("Failed to load dashboard data.");
+      } finally {
+        setLoading(false);
       }
     };
 
     fetchDashboard();
   }, []);
 
+  // --- Fetch Selected Bus Data ---
   useEffect(() => {
     if (!selectedBus) return;
-
-    const { startDate, endDate } = getDateRange("This Week");
+    const range = getDateRange("This Week");
+    const startDate = range?.startDate;
+    const endDate = range?.endDate;
+    if (!startDate || !endDate) return;
 
     const fetchBusDetails = async () => {
       try {
-        const res = await axios.get(
-          `${API_BASE_URL}/vehicles/${selectedBus}/details?include=readings,alerts`
+        setLoading(true);
+        const res = await axios.get<any>(
+          `${API_BASE_URL}/vehicles/${selectedBus}/details?include=readings,alerts,sensor&fromDate=${startDate.toISOString()}&toDate=${endDate.toISOString()}`
         );
-
-        const data = res.data as BusDetailsResponse;
-        const readings = data.readings || [];
-        const alerts = data.alerts || [];
-
-        const enrichedReadings = readings.map((r: any) => {
-          const readingTime = new Date(r.timestamp).getTime();
-          const matchedAlert = alerts.find((a: any) => {
-            const alertTime = new Date(a.timestamp).getTime();
-            return Math.abs(alertTime - readingTime) < 60000;
-          });
-
+        const details = res.data;
+        // readings can be under sensor.readings or details.readings
+        let readings = [];
+        if (details.sensor && Array.isArray(details.sensor.readings)) {
+          readings = details.sensor.readings;
+        } else if (Array.isArray(details.readings)) {
+          readings = details.readings;
+        }
+        // alerts can be under sensor.alerts or details.alerts
+        let alerts = [];
+        if (details.sensor && Array.isArray(details.sensor.alerts)) {
+          alerts = details.sensor.alerts;
+        } else if (Array.isArray(details.alerts)) {
+          alerts = details.alerts;
+        }
+        // Enrich readings with alert info (match by timestamp within 1 min)
+        const enriched = readings.map((r: any) => {
+          const matched = alerts.find(
+            (a: any) =>
+              Math.abs(new Date(a.timestamp).getTime() - new Date(r.timestamp).getTime()) < 60000
+          );
           return {
-            timestamp: r.timestamp,
-            fuelLevel: r.fuelLevel,
-            eventType: matchedAlert?.type?.toUpperCase() || "NORMAL",
-            description: matchedAlert?.description,
+            ...r,
+            eventType: r.eventType || matched?.type || "NORMAL",
+            description: r.description || matched?.description,
           };
         });
-
-        setFuelData(enrichedReadings);
-        setEvents(enrichedReadings.filter((r) => r.eventType !== "NORMAL"));
-
-        const usageRes = await axios.get<FuelUsageStats>(`${API_BASE_URL}/fuel-usage`, {
-         params: {
-  busId: selectedBus,
-  fromDate: (startDate ?? new Date()).toISOString(),
-  toDate: (endDate ?? new Date()).toISOString(),
-},
+        setFuelData(enriched);
+        setEvents(alerts || []);
+        // Fuel usage stats
+        const usage = await axios.get<FuelUsageStats>(`${API_BASE_URL}/fuelusage`, {
+          params: {
+            busId: selectedBus,
+            fromDate: startDate.toISOString(),
+            toDate: endDate.toISOString(),
+          },
         });
-
-        setFuelStats(usageRes.data);
+        setFuelStats({
+          ...usage.data,
+          fuelEfficiency: usage.data.fuelEfficiency ?? 0,
+        });
+        setError(null);
       } catch (err) {
-        console.error("Error fetching selected bus details:", err);
+        console.error("Bus detail fetch error:", err);
+        setError("Failed to load bus details.");
+      } finally {
+        setLoading(false);
       }
     };
 
     fetchBusDetails();
   }, [selectedBus]);
 
+  // --- UI Render ---
+  if (loading && topBuses.length === 0) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <div className="animate-spin h-12 w-12 border-t-2 border-b-2 border-blue-500 rounded-full"></div>
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+          {error}
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="space-y-10 px-6 py-8 max-w-7xl mx-auto text-gray-800 dark:text-gray-100">
-      {/* Intro */}
-      <div className="relative z-10 text-center py-12 px-6 bg-white/80 dark:bg-gray-800/80 backdrop-blur rounded-2xl shadow-lg max-w-4xl mx-auto space-y-6">
-        <p className="text-lg md:text-xl leading-relaxed font-medium">
-          Welcome to <span className="font-signord font-semibold text-blue-600 dark:text-blue-300">FuelSafe</span> — your centralized platform to monitor fuel usage, detect theft, and track refueling activities.
+      {/* Intro Section */}
+      <div className="text-center py-10 bg-white dark:bg-gray-800 rounded-xl shadow-lg space-y-6">
+        <p className="text-xl font-medium">
+          Welcome to <span className="text-blue-600 dark:text-blue-300 font-bold">FuelSafe</span>
         </p>
-        <div className="flex flex-wrap justify-center gap-3 mt-4">
-          <span className="bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-4 py-2 rounded-full text-sm font-medium">🔍 Real-time Monitoring</span>
-          <span className="bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-100 px-4 py-2 rounded-full text-sm font-medium">⚠️ Anomaly Detection</span>
-          <span className="bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-100 px-4 py-2 rounded-full text-sm font-medium">✅ {stats.totalBuses} Buses Monitored</span>
+        <div className="flex justify-center gap-3 flex-wrap">
+          <span className="badge">🔍 Real-time Monitoring</span>
+          <span className="badge">⚠️ Anomaly Detection</span>
+          <span className="badge">✅ {totalBuses} Buses Monitored</span>
         </div>
       </div>
-
       {/* Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-gradient-to-r from-blue-500 to-blue-700 text-white p-6 rounded-xl shadow-md flex flex-col gap-2 hover:scale-[1.02] transition-transform">
-          <div className="flex justify-between items-center">
-            <BusFront className="w-8 h-8 text-white" />
-            <div className="w-8 h-8" />
-          </div>
-          <h3 className="text-sm">Total Buses</h3>
+        <div className="bg-blue-600 text-white p-6 rounded-lg shadow flex flex-col">
+          <BusFront className="w-8 h-8 mb-2" />
+          <h4 className="text-sm">Total Buses</h4>
           <p className="text-2xl font-bold">
-            <CountUp end={stats.totalBuses} duration={1.2} separator="," />
+            <CountUp end={totalBuses} duration={1} />
           </p>
         </div>
-
-        <StatCards title="Ongoing Alerts" icon="alert" color="from-red-500 to-red-700" apiPath="/alerts/count" />
-        <StatCards title="Fuel Theft Events" icon="fuel" color="from-yellow-500 to-yellow-700" apiPath="/alerts/count?type=THEFT" />
-        <StatCards title="Refueling Events" icon="refuel" color="from-green-500 to-green-700" apiPath="/alerts/count?type=REFUEL" />
+        <StatCards title="Ongoing Alerts" icon="alert" color="from-red-500 to-red-700" apiPath="/alerts" />
+        <StatCards title="Fuel Theft Events" icon="fuel" color="from-yellow-500 to-yellow-700" apiPath="/alerts?type=THEFT" />
+        <StatCards title="Refueling Events" icon="refuel" color="from-green-500 to-green-700" apiPath="/alerts?type=REFUEL" />
       </div>
-
       {/* Monitored Buses */}
-      <div>
-        <h3 className="text-2xl font-semibold mb-4">🚌 Monitored Buses</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {stats.topBuses.map((bus, idx) => (
-            <MonitoredBusCard
-              key={idx}
-              busId={bus.busId}
-              regNumber={bus.registrationNo}
-              driver={bus.driverName}
-              route={bus.routeName}
-              fuelLevel={bus.fuelLevel}
-              status={bus.status}
-              imageUrl=""
-              onClick={() => setSelectedBus((prev) => (prev === bus.busId ? null : bus.busId))}
-              selected={selectedBus === bus.busId}
-            />
-          ))}
-        </div>
+      <h3 className="text-xl font-semibold mt-10">🚌 Monitored Buses</h3>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        {topBuses.map((bus) => (
+          <MonitoredBusCard
+            busId={bus.busId}
+            key={bus.busId}
+            regNumber={bus.registrationNo}
+            driver={bus.driverName}
+            route={bus.routeName}
+            fuelLevel={bus.fuelLevel}
+            status={bus.status}
+            imageUrl={busImage}
+            onClick={() => setSelectedBus(bus.busId)}
+            selected={selectedBus === bus.busId}
+          />
+        ))}
       </div>
-
-      {/* Selected Bus Chart */}
+      {/* Selected Chart */}
       {selectedBus && (
-        <div className="mt-10 space-y-8">
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow border border-gray-100 dark:border-gray-700">
-            <h3 className="text-xl font-semibold mb-4">
-              Fuel Level Over Time – <span className="text-blue-600 dark:text-blue-400">{selectedBus}</span>
-            </h3>
+        <div className="mt-10 space-y-6">
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow">
+            <h4 className="font-semibold text-lg mb-3">
+              Fuel Level –{" "}
+              {topBuses.find((b) => b.busId === selectedBus)?.registrationNo || selectedBus}
+            </h4>
             <FuelChart fuelData={fuelData} busId={selectedBus} />
-
-
-            {fuelStats && <FuelStatsGrid stats={fuelStats} />}
+            {fuelStats && (
+              <FuelStatsGrid
+                stats={{
+                  total_fuel_consumed: fuelStats.totalFuelConsumed,
+                  total_fuel_stolen: fuelStats.totalFuelStolen,
+                  total_fuel_refueled: fuelStats.totalFuelRefueled,
+                  distance_traveled: fuelStats.distanceTravelled,
+                  fuel_efficiency: fuelStats.fuelEfficiency,
+                }}
+              />
+            )}
           </div>
         </div>
       )}

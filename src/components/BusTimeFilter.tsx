@@ -6,9 +6,11 @@ import axios from "axios";
 import "react-day-picker/dist/style.css";
 import { API_BASE_URL } from "../config";
 
+// Backend: bus object from /vehicles endpoint
 interface BusOption {
-  busId: string;
+  id: string; // backend: id
   registrationNo: string;
+  [key: string]: any;
 }
 
 interface Props {
@@ -60,17 +62,13 @@ const BusTimeFilter: React.FC<Props> = ({
 }) => {
   const [busOptions, setBusOptions] = useState<BusOption[]>([]);
 
+  // Fetch buses from /vehicles endpoint (backend standard)
   useEffect(() => {
     const fetchBuses = async () => {
       try {
-        const res = await axios.get<{ topBuses: BusOption[] }>(`${API_BASE_URL}/dashboard`);
-        const topBuses = res.data?.topBuses || [];
-        setBusOptions(
-          topBuses.map((b) => ({
-            busId: b.busId,
-            registrationNo: b.registrationNo,
-          }))
-        );
+        const res = await axios.get<BusOption[]>(`${API_BASE_URL}/vehicles`);
+        const buses = res.data || [];
+        setBusOptions(buses);
       } catch (err) {
         console.error("Failed to fetch buses:", err);
       }
@@ -79,19 +77,22 @@ const BusTimeFilter: React.FC<Props> = ({
     fetchBuses();
   }, []);
 
+  // Set selectedBusId based on exact registrationNo match (case-insensitive)
   useEffect(() => {
     const match = busOptions.find(
       (b) => b.registrationNo.toLowerCase() === busSearch.toLowerCase()
     );
     if (match) {
-      setSelectedBusId(match.busId);
+      setSelectedBusId(match.id);
     } else {
       setSelectedBusId(null);
     }
-  }, [busSearch, busOptions]);
+  }, [busSearch, busOptions, setSelectedBusId]);
 
+  // Suggestions for dropdown (partial match, not exact)
   const filteredSuggestions = busOptions.filter(
     (b) =>
+      busSearch &&
       b.registrationNo.toLowerCase().includes(busSearch.toLowerCase()) &&
       b.registrationNo.toLowerCase() !== busSearch.toLowerCase()
   );
@@ -110,16 +111,17 @@ const BusTimeFilter: React.FC<Props> = ({
             onChange={(e) => setBusSearch(e.target.value)}
             placeholder="e.g. UP32AB1234"
             className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-4 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-900 dark:text-white"
+            autoComplete="off"
           />
 
           {filteredSuggestions.length > 0 && (
             <ul className="absolute z-10 w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 mt-1 rounded-md shadow max-h-40 overflow-y-auto">
               {filteredSuggestions.map((b) => (
                 <li
-                  key={b.busId}
+                  key={b.id}
                   onClick={() => {
                     setBusSearch(b.registrationNo);
-                    setSelectedBusId(b.busId);
+                    setSelectedBusId(b.id);
                   }}
                   className="px-4 py-2 cursor-pointer hover:bg-blue-100 dark:hover:bg-gray-700"
                 >
@@ -245,4 +247,3 @@ const BusTimeFilter: React.FC<Props> = ({
 };
 
 export default BusTimeFilter;
-
