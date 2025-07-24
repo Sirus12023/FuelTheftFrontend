@@ -1,4 +1,5 @@
 // pages/FuelTheft.tsx
+
 import React, { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import axios from "axios";
@@ -8,20 +9,16 @@ import BusTimeFilter from "../components/BusTimeFilter";
 import FuelChart from "../components/FuelChart";
 import MonitoredBusCard from "../components/MonitoredBusCard";
 import { getDateRange } from "../utils/dateRangeFromTimeOption";
+import FuelStatsGrid from "../components/FuelStatsGrid";
 
-// Define BusDetailsResponse type
-type BusDetailsResponse = {
-  registrationNo: string;
-  driver?: string;
-  route?: string;
-  currentFuelLevel?: number;
-  status?: string;
-  readings: Array<{
-    eventType?: string;
-    [key: string]: any;
-  }>;
-};
 
+interface FuelUsageStats {
+  totalFuelConsumed: number;
+  totalFuelStolen: number;
+  totalFuelRefueled: number;
+  distanceTravelled: number;
+  fuelEfficiency: number;
+}
 
 const FuelTheft: React.FC = () => {
   const location = useLocation();
@@ -40,6 +37,7 @@ const FuelTheft: React.FC = () => {
   const [fuelData, setFuelData] = useState<any[]>([]);
   const [events, setEvents] = useState<any[]>([]);
   const [busDetails, setBusDetails] = useState<any>(null);
+  const [fuelStats, setFuelStats] = useState<FuelUsageStats | null>(null);
 
   useEffect(() => {
     if (initialBus) {
@@ -49,42 +47,69 @@ const FuelTheft: React.FC = () => {
   }, [initialBus]);
 
   useEffect(() => {
-  if (!selectedBus) return;
+    if (!selectedBus) return;
 
-  const { startDate: computedStart, endDate: computedEnd } = getDateRange(timeRange);
+    const { startDate: computedStart, endDate: computedEnd } = getDateRange(timeRange);
 
-  const fetchBusData = async () => {
-    try {
-      const res = await axios.get<BusDetailsResponse>(
-        `${API_BASE_URL}/buses/${selectedBus}/details`,
-        {
-          params: {
-            timeRange,
-            startDate: (showCustom ? startDate : computedStart)?.toISOString(),
-            endDate: (showCustom ? endDate : computedEnd)?.toISOString(),
-          },
-        }
-      );
+    const fetchBusData = async () => {
+      try {
+        const res = await axios.get(
+          `${API_BASE_URL}/vehicles/${selectedBus}/details?include=readings,alerts,events`
+        );
 
-      const readings = (res.data.readings || []).map((r: any) => ({
-        ...r,
-        eventType: r.eventType?.toUpperCase() || "NORMAL",
-      }));
+        const data = res.data as {
+          alerts?: any[];
+          readings?: any[];
+          registrationNo?: string;
+          driver?: { name?: string };
+          route?: { name?: string };
+          sensor?: { isActive?: boolean };
+        };
+        const alerts = data.alerts || [];
+        const readings = (data.readings || []).map((r: any) => {
+          const matchingAlert = alerts.find((a: any) => a.timestamp === r.timestamp);
+          return {
+            ...r,
+            eventType: matchingAlert?.type?.toUpperCase() || "NORMAL",
+          };
+        });
 
-      setFuelData(readings);
-      setEvents(readings.filter((r: any) => r.eventType !== "NORMAL"));
-      setBusDetails(res.data);
-    } catch (error) {
-      console.error("Error fetching bus fuel data:", error);
-    }
-  };
+        setFuelData(readings);
+        setEvents(readings.filter((r: any) => r.eventType !== "NORMAL"));
+        const sensorRes = await axios.get(`${API_BASE_URL}/sensor`, {
+  params: { busId: selectedBus },
+});
 
-  fetchBusData();
-}, [selectedBus, timeRange, startDate, endDate, showCustom]);
+const sensors = Array.isArray(sensorRes.data) ? sensorRes.data : [];
+const allSensorsActive = sensors.every((s: any) => s.isActive);
 
+setBusDetails({
+  registrationNo: data.registrationNo,
+  driver: data.driver?.name || "Unassigned",
+  route: data.route?.name || "Unknown",
+  currentFuelLevel: data.readings?.[data.readings.length - 1]?.fuelLevel ?? 0,
+  status: allSensorsActive ? "normal" : "offline",
+});
+
+
+        const usageRes = await axios.get<FuelUsageStats>(`${API_BASE_URL}/fuel-usage`, {
+  params: {
+    busId: selectedBus,
+    fromDate: (computedStart ?? new Date()).toISOString(),
+    toDate: (computedEnd ?? new Date()).toISOString(),
+  },
+});
+setFuelStats(usageRes.data);
+      } catch (error) {
+        console.error("Error fetching bus fuel data or fuel stats:", error);
+      }
+    };
+
+    fetchBusData();
+  }, [selectedBus, timeRange, startDate, endDate, showCustom]);
 
   return (
-    <div className="px-6 py-12 max-w-6xl mx-auto space-y-10 font-sans text-gray-800 dark:text-gray-100" >
+    <div className="px-6 py-12 max-w-6xl mx-auto space-y-10 font-sans text-gray-800 dark:text-gray-100">
       {/* Header */}
       <div className="text-center space-y-2">
         <h2 className="text-4xl sm:text-5xl font-extrabold text-blue-900 dark:text-blue-200">
@@ -113,11 +138,11 @@ const FuelTheft: React.FC = () => {
           showStartPicker={showStartPicker}
           setShowStartPicker={setShowStartPicker}
           showEndPicker={showEndPicker}
-          setShowEndPicker={setShowEndPicker}
+          setEndPicker={setShowEndPicker}
         />
       </div>
 
-      {/* Placeholder */}
+      {/* No selection placeholder */}
       {!selectedBus && (
         <div className="bg-gradient-to-br from-white to-blue-50 dark:from-gray-800 dark:to-gray-700 border dark:border-gray-600 rounded-xl shadow-md text-center py-24 px-4 text-gray-600 dark:text-gray-300 animate-fade-in">
           <div className="mb-4">
@@ -138,24 +163,32 @@ const FuelTheft: React.FC = () => {
         <MonitoredBusCard
           busId={selectedBus}
           regNumber={busDetails.registrationNo}
-          driver={busDetails.driver || "Unassigned"}
-          route={busDetails.route || "Unknown"}
+          driver={busDetails.driver}
+          route={busDetails.route}
           fuelLevel={busDetails.currentFuelLevel}
-          status={busDetails.status || "normal"}
+          status={busDetails.status}
           imageUrl="/src/assets/temp_bus.avif"
         />
       )}
 
       {/* Fuel Chart */}
       {selectedBus && (
-        <FuelChart fuelData={fuelData} busId={selectedBus} />
+        <>
+          <FuelChart
+            fuelData={fuelData}
+            events={events}
+            busId={selectedBus}
+          />
+
+          {fuelStats && <FuelStatsGrid stats={fuelStats} />}
+
+        </>
       )}
     </div>
   );
 };
 
 export default FuelTheft;
-
 
 
 

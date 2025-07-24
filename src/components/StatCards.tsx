@@ -42,32 +42,45 @@ const StatCards: React.FC<Props> = ({ title, icon, color, apiPath }) => {
   const [customEnd, setCustomEnd] = useState<string>("");
 
   useEffect(() => {
-    const fetchCount = async () => {
-      const { startDate, endDate } =
-        range === "custom"
-          ? {
-              startDate: customStart ? new Date(customStart) : undefined,
-              endDate: customEnd ? new Date(customEnd) : undefined,
-            }
-          : getDateRange(range);
+  const fetchCount = async () => {
+    const { startDate, endDate } =
+      range === "custom"
+        ? {
+            startDate: customStart ? new Date(customStart) : undefined,
+            endDate: customEnd ? new Date(customEnd) : undefined,
+          }
+        : getDateRange(range);
 
-      try {
-        const res = await axios.get<{ count: number }>(`${API_BASE_URL}${apiPath}`, {
-          params: {
-            startDate: startDate?.toISOString(),
-            endDate: endDate?.toISOString(),
-          },
+    try {
+      // Parse query params from apiPath if any
+      let url = `${API_BASE_URL}${apiPath}`;
+      const params: Record<string, any> = {};
+
+      // Extract and parse query string from apiPath
+      if (apiPath.includes("?")) {
+        const [base, query] = apiPath.split("?");
+        url = `${API_BASE_URL}${base}`;
+        query.split("&").forEach((kv) => {
+          const [key, value] = kv.split("=");
+          params[key] = value;
         });
-
-        setCount(res.data?.count ?? 0);
-      } catch (err) {
-        console.error(`Error fetching ${title} count`, err);
-        setCount(0);
       }
-    };
 
-    fetchCount();
-  }, [range, customStart, customEnd, apiPath, title]);
+      // Add time filters only if present
+      if (startDate) params.startDate = startDate.toISOString();
+      if (endDate) params.endDate = endDate.toISOString();
+
+      const res = await axios.get<{ count: number }>(url, { params });
+      setCount(res.data?.count ?? 0);
+    } catch (err) {
+      console.error(`Error fetching ${title} count`, err);
+      setCount(0);
+    }
+  };
+
+  fetchCount();
+}, [range, customStart, customEnd, apiPath, title]);
+
 
   useEffect(() => {
     if (count === null) return;

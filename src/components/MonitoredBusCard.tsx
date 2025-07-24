@@ -11,7 +11,7 @@ interface MonitoredBusCardProps {
   sensorStatus?: "Active" | "Inactive";
   status: "normal" | "alert" | "offline";
   onClick?: () => void;
-  selected?: boolean; // actively selected
+  selected?: boolean;
 }
 
 const MonitoredBusCard: React.FC<MonitoredBusCardProps> = ({
@@ -39,10 +39,22 @@ const MonitoredBusCard: React.FC<MonitoredBusCardProps> = ({
     }
   };
 
+  const getStatusBadge = () => {
+    switch (status) {
+      case "alert":
+        return "bg-red-500 text-white";
+      case "offline":
+        return "bg-gray-500 text-white";
+      case "normal":
+      default:
+        return "bg-green-500 text-white";
+    }
+  };
+
   return (
     <div
       onClick={isFuelTheftPage ? undefined : handleClick}
-      title={`Bus ID: ${busId}\nFuel Level: ${fuelLevel}%`}
+      title={`Bus ID: ${busId}\nFuel Level: ${fuelLevel} L`}
       className={`group relative flex items-center border-2 rounded-2xl shadow transition-all w-full
         ${isFuelTheftPage ? "cursor-default" : "cursor-pointer"}
         ${
@@ -54,7 +66,7 @@ const MonitoredBusCard: React.FC<MonitoredBusCardProps> = ({
         hover:shadow-lg hover:border-blue-500 hover:scale-[1.02] dark:hover:border-blue-400
       `}
     >
-      {/* Image */}
+      {/* Bus Image */}
       <div className="w-32 h-32 overflow-hidden rounded-l-2xl">
         <img
           src={imageUrl}
@@ -63,14 +75,30 @@ const MonitoredBusCard: React.FC<MonitoredBusCardProps> = ({
         />
       </div>
 
-      {/* Text */}
+      {/* Bus Info */}
       <div className="flex flex-col justify-between p-4 h-full flex-1">
         <div className="text-lg font-semibold">{regNumber}</div>
         <div className="text-sm text-gray-600 dark:text-gray-300">Driver: {driver}</div>
         <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">Route: {route}</div>
+
+        {/* Status + Fuel */}
+        <div className="flex justify-between items-center mt-3">
+          {/* Fuel Level */}
+          <div className="text-xs text-blue-600 dark:text-blue-300 font-medium">
+            ⛽ Fuel: {fuelLevel.toFixed(1)} L
+          </div>
+
+          {/* Status Badge */}
+          <div
+            className={`px-2 py-0.5 text-[10px] rounded-full font-bold uppercase ${getStatusBadge()}`}
+          >
+            {status}
+          </div>
+        </div>
       </div>
     </div>
   );
 };
 
 export default MonitoredBusCard;
+

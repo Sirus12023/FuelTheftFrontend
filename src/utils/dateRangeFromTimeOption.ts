@@ -7,7 +7,7 @@ import {
   startOfMonth,
   endOfMonth,
   startOfDay,
-  endOfDay, 
+  endOfDay,
 } from "date-fns";
 
 export function getDateRange(timeRange: string): {
@@ -62,6 +62,6 @@ export function getDateRange(timeRange: string): {
 
     case "Custom":
     default:
-      return {}; // Let user select manually
+      return {};
   }
 }

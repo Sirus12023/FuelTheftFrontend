@@ -33,7 +33,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <aside
-      className={`h-screen fixed top-0 left-0 z-30 transition-all duration-300 shadow-lg ${
+      className={`h-screen fixed top-0 left-0 z-30 transition-all duration-300 shadow-lg overflow-hidden ${
         collapsed ? "w-16" : "w-64"
       } bg-gradient-to-b from-[#1e3a8a] to-[#2563eb] border-r border-blue-900 flex flex-col`}
     >
@@ -46,22 +46,30 @@ const Sidebar: React.FC<SidebarProps> = ({
         }`}
       >
         {collapsed ? (
-          <img src={logoIcon4} alt="Logo Icon" className="h-12 max-h-12 w-auto object-contain" />
+          <img
+            src={logoIcon4}
+            alt="Logo Icon"
+            className="h-12 max-h-12 w-auto object-contain"
+          />
         ) : (
-          <img src={logoFull3} alt="Logo" className="h-12 max-h-12 w-auto object-contain" />
+          <img
+            src={logoFull3}
+            alt="Logo"
+            className="h-12 max-h-12 w-auto object-contain"
+          />
         )}
 
         <div className="relative group">
           <button
             onClick={toggleCollapsed}
+            aria-label="Toggle Sidebar"
             className="text-white hover:text-yellow-300 mt-1"
-            title={collapsed ? "Open Sidebar" : "Close Sidebar"}
           >
             <FaBars className="text-2xl" />
           </button>
           {collapsed && (
             <span className="absolute left-full ml-2 whitespace-nowrap bg-white dark:bg-gray-900 text-black dark:text-white text-xs rounded-md px-2 py-1 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-50">
-              {collapsed ? "Expand" : "Collapse"}
+              Expand
             </span>
           )}
         </div>
@@ -101,15 +109,22 @@ const Sidebar: React.FC<SidebarProps> = ({
       {/* Dark Mode Toggle */}
       <div className="px-4 py-4">
         <div
+          role="button"
+          aria-label="Toggle Dark Mode"
+          onClick={toggleDarkMode}
           className={`relative group flex items-center ${
             collapsed ? "justify-center" : "gap-2"
           } text-white hover:text-yellow-200 cursor-pointer`}
-          onClick={toggleDarkMode}
-          title="Toggle Dark Mode"
         >
-          {darkMode ? <FaSun className="text-lg" /> : <FaMoon className="text-lg" />}
+          {darkMode ? (
+            <FaSun className="text-lg" />
+          ) : (
+            <FaMoon className="text-lg" />
+          )}
           {!collapsed && (
-            <span className="text-sm">{darkMode ? "Light Mode" : "Dark Mode"}</span>
+            <span className="text-sm">
+              {darkMode ? "Light Mode" : "Dark Mode"}
+            </span>
           )}
           {collapsed && (
             <span className="absolute left-full ml-2 whitespace-nowrap bg-white dark:bg-gray-900 text-black dark:text-white text-xs rounded-md px-2 py-1 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-50">

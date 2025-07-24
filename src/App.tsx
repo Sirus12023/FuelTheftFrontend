@@ -1,5 +1,6 @@
 // src/App.tsx
 import "react-day-picker/dist/style.css";
+import "leaflet/dist/leaflet.css"; // ✅ Ensure map components work correctly
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Dashboard from "./pages/Dashboard";
 import FuelTheft from "./pages/FuelTheft";
@@ -31,6 +32,17 @@ function App() {
           element={
             <MainLayout>
               <BusEvents />
+            </MainLayout>
+          }
+        />
+        {/* Optional: Add fallback route */}
+        <Route
+          path="*"
+          element={
+            <MainLayout>
+              <div className="p-8 text-center text-red-500 text-lg font-semibold">
+                404 – Page Not Found
+              </div>
             </MainLayout>
           }
         />
