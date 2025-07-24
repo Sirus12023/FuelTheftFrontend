@@ -35,7 +35,9 @@ const getIcon = (name: string) => {
 };
 
 const StatCards: React.FC<Props> = ({ title, icon, color, apiPath }) => {
-  const [count, setCount] = useState<number>(0);
+  const [count, setCount] = useState<number | null>(null);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
   const [range, setRange] = useState<string>("today");
   const [customStart, setCustomStart] = useState<string>("");
   const [customEnd, setCustomEnd] = useState<string>("");
@@ -44,15 +46,30 @@ const StatCards: React.FC<Props> = ({ title, icon, color, apiPath }) => {
     const fetchCount = async () => {
       let startDate: Date | undefined;
       let endDate: Date | undefined;
+      let effectiveRange = range;
 
-      if (range === "custom") {
+      // If nothing is selected, default to "today"
+      if (!range || range === "") {
+        effectiveRange = "today";
+        setRange("today");
+      }
+
+      if (effectiveRange === "custom") {
         startDate = customStart ? new Date(customStart) : undefined;
         endDate = customEnd ? new Date(customEnd) : undefined;
+        // Don't fetch if custom range is incomplete
+        if (!customStart || !customEnd) {
+          setCount(null);
+          return;
+        }
       } else {
-        const rangeObj = getDateRange(range);
+        const rangeObj = getDateRange(effectiveRange);
         startDate = rangeObj?.startDate;
         endDate = rangeObj?.endDate;
       }
+
+      setLoading(true);
+      setError(null);
 
       try {
         // Parse query params from apiPath if any
@@ -73,15 +90,50 @@ const StatCards: React.FC<Props> = ({ title, icon, color, apiPath }) => {
         if (startDate) params.startDate = startDate.toISOString();
         if (endDate) params.endDate = endDate.toISOString();
 
-        const res = await axios.get<{ count: number }>(url, { params });
-        setCount(res.data?.count ?? 0);
-      } catch (err) {
+        // Always expect array response, filter by time and type if needed
+        const res = await axios.get(url, { params });
+
+        let data: any[] = [];
+        if (Array.isArray(res.data)) {
+          data = res.data;
+        } else if (typeof res.data === "object" && res.data !== null && Array.isArray((res.data as any).data)) {
+          data = (res.data as any).data;
+        } else if (typeof res.data === "object" && res.data !== null && "count" in res.data) {
+          // fallback for { count } response
+          setCount(typeof res.data.count === "number" ? res.data.count : 0);
+          setLoading(false);
+          return;
+        } else {
+          setCount(0);
+          setLoading(false);
+          return;
+        }
+
+        // Filter by time range if startDate/endDate are present
+        if (startDate && endDate) {
+          data = data.filter((item) => {
+            const ts = new Date(item.timestamp);
+            return ts >= startDate! && ts <= endDate!;
+          });
+        }
+
+        // If apiPath has a type filter (e.g. ?type=THEFT), filter by type
+        if (params.type) {
+          data = data.filter((item) => item.type === params.type);
+        }
+
+        setCount(data.length);
+      } catch (err: any) {
+        setError("Failed to load data");
+        setCount(null);
         console.error(`Error fetching ${title} count`, err);
-        setCount(0);
+      } finally {
+        setLoading(false);
       }
     };
 
     fetchCount();
+    // eslint-disable-next-line
   }, [range, customStart, customEnd, apiPath, title]);
 
   return (
@@ -124,8 +176,16 @@ const StatCards: React.FC<Props> = ({ title, icon, color, apiPath }) => {
       </div>
 
       <h3 className="text-sm mt-2">{title}</h3>
-      <p className="text-3xl font-bold">
-        <CountUp end={count} duration={1} />
+      <p className="text-3xl font-bold min-h-[2.5rem] flex items-center">
+        {loading ? (
+          <span className="animate-spin inline-block w-6 h-6 border-2 border-white border-t-transparent rounded-full"></span>
+        ) : error ? (
+          <span className="text-red-200 text-base">{error}</span>
+        ) : count !== null ? (
+          <CountUp end={count} duration={1} />
+        ) : (
+          <span className="text-gray-200 text-base">No data</span>
+        )}
       </p>
     </div>
   );
