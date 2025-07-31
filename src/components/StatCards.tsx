@@ -39,7 +39,7 @@ const StatCards: React.FC<Props> = ({
   customEnd,
 }) => {
   const [count, setCount] = useState<number | null>(null);
-  const [loading, setLoading] = useState<boolean>(false);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -79,38 +79,32 @@ const StatCards: React.FC<Props> = ({
         if (startDate) params.startDate = startDate.toISOString();
         if (endDate) params.endDate = endDate.toISOString();
 
-        const res = await axios.get(url, { params });
+        const res = await axios.get<{ count?: number; data?: any[] }>(url, { params });
 
+        // Handle various response shapes
         let data: any[] = [];
+
         if (Array.isArray(res.data)) {
           data = res.data;
-        } else if (
-          typeof res.data === "object" &&
-          res.data !== null &&
-          Array.isArray((res.data as any).data)
-        ) {
-          data = (res.data as any).data;
-        } else if (
-          typeof res.data === "object" &&
-          res.data !== null &&
-          "count" in res.data
-        ) {
+        } else if (res.data && Array.isArray(res.data.data)) {
+          data = res.data.data;
+        } else if ("count" in res.data) {
           setCount(typeof res.data.count === "number" ? res.data.count : 0);
-          setLoading(false);
           return;
         } else {
           setCount(0);
-          setLoading(false);
           return;
         }
 
+        // Filter by timestamp
         if (startDate && endDate) {
           data = data.filter((item) => {
             const ts = new Date(item.timestamp);
-            return ts >= startDate && ts <= endDate;
+            return !isNaN(ts.getTime()) && ts >= startDate && ts <= endDate;
           });
         }
 
+        // Filter by alert type if needed
         if (params.type) {
           data = data.filter((item) => item.type === params.type);
         }
@@ -140,7 +134,7 @@ const StatCards: React.FC<Props> = ({
       <h3 className="text-sm mt-2">{title}</h3>
       <p className="text-3xl font-bold min-h-[2.5rem] flex items-center">
         {loading ? (
-          <span className="animate-spin inline-block w-6 h-6 border-2 border-white border-t-transparent rounded-full"></span>
+          <span className="animate-spin inline-block w-6 h-6 border-2 border-white border-t-transparent rounded-full" />
         ) : error ? (
           <span className="text-red-200 text-base">{error}</span>
         ) : count !== null ? (

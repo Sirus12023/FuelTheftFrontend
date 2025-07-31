@@ -22,7 +22,7 @@ interface RawReading {
 }
 
 interface ParsedDataPoint {
-  time: number;
+  time: number | string;
   fuelLevel: number;
   event: EventType;
   fuelChange?: number;
@@ -188,9 +188,11 @@ const FuelChart: React.FC<FuelChartProps> = ({ fuelData, busId }) => {
                 />
               );
             }}
-            activeDot={({ cx, cy }) => (
-              <circle cx={cx} cy={cy} r={6} fill="#3b82f6" stroke="#000" strokeWidth={1} />
-            )}
+            activeDot={(props) => {
+  const { cx, cy } = props;
+  return <circle cx={cx} cy={cy} r={6} fill="#3b82f6" stroke="#000" strokeWidth={1} />;
+}}
+
           />
         </LineChart>
       </ResponsiveContainer>

@@ -11,9 +11,6 @@ import { NavLink } from "react-router-dom";
 import logoFull3 from "../assets/logoFull3.png";
 import logoIcon4 from "../assets/logoIcon4.png";
 
-// Sidebar does not require backend data as per current backend design.
-// If backend provides organization name, logo, or navigation structure in future, update here accordingly.
-
 interface SidebarProps {
   collapsed: boolean;
   toggleCollapsed: () => void;
@@ -27,8 +24,6 @@ const Sidebar: React.FC<SidebarProps> = ({
   darkMode,
   toggleDarkMode,
 }) => {
-  // Navigation links are static as per current backend design.
-  // If backend provides navigation structure, update this accordingly.
   const links = [
     { to: "/", label: "Dashboard", icon: <FaHome /> },
     { to: "/fuel-theft", label: "Fuel Theft", icon: <FaBusAlt /> },
@@ -63,14 +58,20 @@ const Sidebar: React.FC<SidebarProps> = ({
           />
         )}
 
+        {/* Collapse Toggle Button (keyboard accessible) */}
         <div className="relative group">
-          <button
+          <div
+            role="button"
+            tabIndex={0}
             onClick={toggleCollapsed}
+            onKeyDown={(e) =>
+              (e.key === "Enter" || e.key === " ") && toggleCollapsed()
+            }
             aria-label="Toggle Sidebar"
-            className="text-white hover:text-yellow-300 mt-1"
+            className="text-white hover:text-yellow-300 mt-1 cursor-pointer focus:outline-none focus:ring-2 focus:ring-yellow-300"
           >
             <FaBars className="text-2xl" />
-          </button>
+          </div>
           {collapsed && (
             <span className="absolute left-full ml-2 whitespace-nowrap bg-white dark:bg-gray-900 text-black dark:text-white text-xs rounded-md px-2 py-1 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-50">
               Expand
@@ -110,15 +111,19 @@ const Sidebar: React.FC<SidebarProps> = ({
         ))}
       </nav>
 
-      {/* Dark Mode Toggle */}
+      {/* Dark Mode Toggle (keyboard accessible) */}
       <div className="px-4 py-4">
         <div
           role="button"
+          tabIndex={0}
           aria-label="Toggle Dark Mode"
           onClick={toggleDarkMode}
+          onKeyDown={(e) =>
+            (e.key === "Enter" || e.key === " ") && toggleDarkMode()
+          }
           className={`relative group flex items-center ${
             collapsed ? "justify-center" : "gap-2"
-          } text-white hover:text-yellow-200 cursor-pointer`}
+          } text-white hover:text-yellow-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-yellow-300`}
         >
           {darkMode ? (
             <FaSun className="text-lg" />

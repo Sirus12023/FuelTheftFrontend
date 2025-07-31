@@ -58,7 +58,8 @@ const BusEvents: React.FC = () => {
       try {
         setLoading(true);
         setError(null);
-        const res = await axios.get(`${API_BASE_URL}/alerts`);
+        const res = await axios.get<Alert[]>(`${API_BASE_URL}/alerts`);
+
         
         // Transform data to match our interface
         const formattedAlerts = res.data.map((alert: any) => ({
