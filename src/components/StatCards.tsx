@@ -81,12 +81,12 @@ const StatCards: React.FC<Props> = ({
 
         const res = await axios.get<{ count?: number; data?: any[] }>(url, { params });
 
-        // Handle various response shapes
+        // Handle different response shapes
         let data: any[] = [];
 
         if (Array.isArray(res.data)) {
           data = res.data;
-        } else if (res.data && Array.isArray(res.data.data)) {
+        } else if (res.data?.data && Array.isArray(res.data.data)) {
           data = res.data.data;
         } else if ("count" in res.data) {
           setCount(typeof res.data.count === "number" ? res.data.count : 0);
@@ -148,3 +148,4 @@ const StatCards: React.FC<Props> = ({
 };
 
 export default StatCards;
+

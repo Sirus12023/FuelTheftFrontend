@@ -41,10 +41,9 @@ const BusEvents: React.FC = () => {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [showMap, setShowMap] = useState(false);
   const [mapCoords, setMapCoords] = useState<{ latitude: number; longitude: number } | null>(null);
-  
+
   const itemsPerPage = 10;
 
-  // Initialize from URL query
   useEffect(() => {
     if (initialBus) {
       setSelectedBus(initialBus);
@@ -52,16 +51,13 @@ const BusEvents: React.FC = () => {
     }
   }, [initialBus]);
 
-  // Fetch alerts
   useEffect(() => {
     const fetchAlerts = async () => {
       try {
         setLoading(true);
         setError(null);
-        const res = await axios.get<Alert[]>(`${API_BASE_URL}/alerts`);
+        const res = await axios.get<Alert[]>(`${API_BASE_URL}/alerts/all`);
 
-        
-        // Transform data to match our interface
         const formattedAlerts = res.data.map((alert: any) => ({
           id: alert.id,
           type: alert.type,
@@ -93,7 +89,6 @@ const BusEvents: React.FC = () => {
     fetchAlerts();
   }, []);
 
-  // Get unique bus registration numbers for suggestions
   const busSuggestions = useMemo(() => {
     const buses = alerts
       .map(alert => alert.bus?.registrationNumber)
@@ -101,25 +96,21 @@ const BusEvents: React.FC = () => {
     return [...new Set(buses)];
   }, [alerts]);
 
-  // Filter alerts based on selected filters
   const filteredAlerts = useMemo(() => {
     let result = alerts;
 
-    // Filter by bus if selected
     if (selectedBus) {
-      result = result.filter(alert => 
+      result = result.filter(alert =>
         alert.bus?.registrationNumber?.toLowerCase().includes(selectedBus.toLowerCase())
       );
     } else {
-      return []; // Show nothing if no bus selected
+      return [];
     }
 
-    // Filter by type if selected
     if (typeFilter) {
       result = result.filter(alert => alert.type === typeFilter);
     }
 
-    // Filter by date range
     if (dateFilter !== "all") {
       let startDate: Date | undefined;
       let endDate: Date | undefined;
@@ -138,7 +129,7 @@ const BusEvents: React.FC = () => {
       if (startDate && endDate) {
         result = result.filter(alert => {
           const eventDate = new Date(alert.timestamp);
-          return isWithinInterval(eventDate, { start: startDate!, end: endDate! });
+          return isWithinInterval(eventDate, { start: startDate, end: endDate });
         });
       }
     }
@@ -146,7 +137,6 @@ const BusEvents: React.FC = () => {
     return result;
   }, [alerts, selectedBus, typeFilter, dateFilter, customStartDate, customEndDate]);
 
-  // Paginate results
   const paginatedAlerts = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
     return filteredAlerts.slice(startIndex, startIndex + itemsPerPage);
@@ -154,7 +144,6 @@ const BusEvents: React.FC = () => {
 
   const pageCount = Math.ceil(filteredAlerts.length / itemsPerPage);
 
-  // Event handlers
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(e.target.value);
     setShowSuggestions(e.target.value.length > 0);

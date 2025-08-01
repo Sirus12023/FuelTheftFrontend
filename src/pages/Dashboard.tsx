@@ -1,4 +1,4 @@
-// Dashboard.tsx 
+// src/pages/Dashboard.tsx
 
 import React, { useEffect, useState } from "react";
 import axios from "axios";
@@ -12,8 +12,14 @@ import { BusFront } from "lucide-react";
 import CountUp from "react-countup";
 import busImage from "../assets/bus1.jpg";
 import DashboardTimeFilter from "../components/DashboardTimeFilter";
+import type { TimeRangeValue } from "../components/DashboardTimeFilter";
 
-// --- Types ---
+const toTitleCase = (str: string) =>
+  str
+    .split(" ")
+    .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+    .join(" ");
+
 interface Reading {
   id: string;
   timestamp: string;
@@ -63,7 +69,7 @@ const Dashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [timeRange, setTimeRange] = useState("today");
+  const [timeRange, setTimeRange] = useState<TimeRangeValue>("today");
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
 
@@ -84,11 +90,10 @@ const Dashboard: React.FC = () => {
 
               const readings = details.sensor?.readings ?? details.readings ?? [];
               const latestFuel = readings.length > 0 ? readings.at(-1).fuelLevel : 0;
-
               const isSensorActive = details.sensor?.isActive !== false;
 
               return {
-                busId: bus.id,
+                 busId: bus.id,
                 registrationNo: bus.registrationNo,
                 driverName: bus.driver || details.driver?.name || "Unknown",
                 routeName: bus.route || details.route?.name || "Unknown",
@@ -110,6 +115,11 @@ const Dashboard: React.FC = () => {
 
         setTopBuses(enriched);
         setTotalBuses(buses.length);
+
+        if (enriched.length > 0 && !selectedBus) {
+          setSelectedBus(enriched[0].busId);
+        }
+
         setError(null);
       } catch (err) {
         console.error("Dashboard fetch error:", err);
@@ -131,7 +141,7 @@ const Dashboard: React.FC = () => {
             startDate: customStart ? new Date(customStart) : undefined,
             endDate: customEnd ? new Date(customEnd) : undefined,
           }
-        : getDateRange(timeRange);
+        : getDateRange(toTitleCase(timeRange));
 
     const startDate = range?.startDate;
     const endDate = range?.endDate;
@@ -219,11 +229,9 @@ const Dashboard: React.FC = () => {
 
   return (
     <div className="space-y-10 px-6 py-8 max-w-7xl mx-auto text-gray-800 dark:text-gray-100">
-      {/* Intro */}
       <div className="text-center py-10 bg-white dark:bg-gray-800 rounded-xl shadow-lg space-y-6">
         <p className="text-xl font-medium">
-          Welcome to{" "}
-          <span className="text-blue-600 dark:text-blue-300 font-bold">FuelSafe</span>
+          Welcome to <span className="text-blue-600 dark:text-blue-300 font-bold">FuelSafe</span>
         </p>
         <div className="flex justify-center gap-3 flex-wrap">
           <span className="badge">🔍 Real-time Monitoring</span>
@@ -232,7 +240,6 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Time Filter */}
       <DashboardTimeFilter
         range={timeRange}
         customStart={customStart}
@@ -244,7 +251,6 @@ const Dashboard: React.FC = () => {
         }}
       />
 
-      {/* Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <div className="bg-blue-600 text-white p-6 rounded-lg shadow flex flex-col">
           <BusFront className="w-8 h-8 mb-2" />
@@ -282,7 +288,6 @@ const Dashboard: React.FC = () => {
         />
       </div>
 
-      {/* Monitored Buses */}
       <h3 className="text-xl font-semibold mt-10">🚌 Monitored Buses</h3>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         {topBuses.map((bus) => (
@@ -301,13 +306,11 @@ const Dashboard: React.FC = () => {
         ))}
       </div>
 
-      {/* Fuel Chart + Stats */}
       {selectedBus && (
         <div className="mt-10 space-y-6">
           <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow">
             <h4 className="font-semibold text-lg mb-3">
-              Fuel Level –{" "}
-              {topBuses.find((b) => b.busId === selectedBus)?.registrationNo || selectedBus}
+              Fuel Level – {topBuses.find((b) => b.busId === selectedBus)?.registrationNo || selectedBus}
             </h4>
             <FuelChart fuelData={fuelData} busId={selectedBus} />
             {fuelStats && (

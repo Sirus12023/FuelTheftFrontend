@@ -13,7 +13,6 @@ import {
 /**
  * Returns a date range object { startDate, endDate } based on the backend's expected time options.
  * The backend expects ISO strings for fromDate/toDate, and week starts on Monday.
- * "Last 24 hours" is a common backend option, so we include it.
  */
 export function getDateRange(timeRange: string): {
   startDate?: Date;
@@ -22,19 +21,19 @@ export function getDateRange(timeRange: string): {
   const now = new Date();
 
   switch (timeRange) {
-    case "Last 24 hours":
+    case "last 24 hours":
       return {
         startDate: new Date(now.getTime() - 24 * 60 * 60 * 1000),
         endDate: now,
       };
 
-    case "Today":
+    case "today":
       return {
         startDate: startOfToday(),
         endDate: endOfToday(),
       };
 
-    case "Yesterday": {
+    case "yesterday": {
       const yesterday = subDays(now, 1);
       return {
         startDate: startOfDay(yesterday),
@@ -42,14 +41,13 @@ export function getDateRange(timeRange: string): {
       };
     }
 
-    case "This Week":
+    case "this week":
       return {
         startDate: startOfWeek(now, { weekStartsOn: 1 }),
         endDate: endOfWeek(now, { weekStartsOn: 1 }),
       };
 
-    case "Last Week": {
-      // Last week: start = startOfWeek(now) - 7 days, end = endOfWeek(now) - 7 days
+    case "last week": {
       const lastWeekStart = subDays(startOfWeek(now, { weekStartsOn: 1 }), 7);
       const lastWeekEnd = subDays(endOfWeek(now, { weekStartsOn: 1 }), 7);
       return {
@@ -58,14 +56,13 @@ export function getDateRange(timeRange: string): {
       };
     }
 
-    case "This Month":
+    case "this month":
       return {
         startDate: startOfMonth(now),
         endDate: endOfMonth(now),
       };
 
-    case "Last Month": {
-      // Last month: get last day of previous month, then get start/end of that month
+    case "last month": {
       const lastMonthDate = subDays(startOfMonth(now), 1);
       return {
         startDate: startOfMonth(lastMonthDate),
@@ -73,13 +70,12 @@ export function getDateRange(timeRange: string): {
       };
     }
 
-    case "All Time":
-      // Backend: omit date range for all time, or set to undefined
-      return {};
+    case "all time":
+      return {}; // No date filtering
 
-    case "Custom":
+    case "custom":
     default:
-      // For custom, the UI should provide startDate/endDate directly
-      return {};
+      return {}; // Let UI provide custom dates
   }
 }
+

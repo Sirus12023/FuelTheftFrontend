@@ -6,9 +6,8 @@ import axios from "axios";
 import "react-day-picker/dist/style.css";
 import { API_BASE_URL } from "../config";
 
-// Backend: bus object from /vehicles endpoint
 interface BusOption {
-  id: string; // backend: id
+  id: string;
   registrationNo: string;
   [key: string]: any;
 }
@@ -20,27 +19,22 @@ interface Props {
   setSelectedBusId: (val: string | null) => void;
   timeRange: string;
   setTimeRange: (val: string) => void;
-  showCustom: boolean;
-  setShowCustom: (val: boolean) => void;
-  startDate: Date | undefined;
-  setStartDate: (val: Date | undefined) => void;
-  endDate: Date | undefined;
-  setEndDate: (val: Date | undefined) => void;
-  showStartPicker: boolean;
-  setShowStartPicker: (val: boolean) => void;
-  showEndPicker: boolean;
-  setShowEndPicker: (val: boolean) => void;
+  customStart: string;
+  setCustomStart: (val: string) => void;
+  customEnd: string;
+  setCustomEnd: (val: string) => void;
 }
 
 const timeOptions = [
-  "Today",
-  "Yesterday",
-  "This Week",
-  "Last Week",
-  "This Month",
-  "Last Month",
-  "Custom",
+  "today",
+  "yesterday",
+  "this week",
+  "last week",
+  "this month",
+  "last month",
+  "custom",
 ];
+
 
 const BusTimeFilter: React.FC<Props> = ({
   busSearch,
@@ -49,53 +43,36 @@ const BusTimeFilter: React.FC<Props> = ({
   setSelectedBusId,
   timeRange,
   setTimeRange,
-  showCustom,
-  setShowCustom,
-  startDate,
-  setStartDate,
-  endDate,
-  setEndDate,
-  showStartPicker,
-  setShowStartPicker,
-  showEndPicker,
-  setShowEndPicker,
+  customStart,
+  setCustomStart,
+  customEnd,
+  setCustomEnd,
 }) => {
   const [busOptions, setBusOptions] = useState<BusOption[]>([]);
+  const [showStartPicker, setShowStartPicker] = useState(false);
+  const [showEndPicker, setShowEndPicker] = useState(false);
 
-  // Fetch buses from /vehicles endpoint (backend standard)
   useEffect(() => {
     const fetchBuses = async () => {
       try {
         const res = await axios.get<BusOption[]>(`${API_BASE_URL}/vehicles`);
-        const buses = res.data || [];
-        setBusOptions(buses);
+        setBusOptions(res.data || []);
       } catch (err) {
         console.error("Failed to fetch buses:", err);
       }
     };
-
     fetchBuses();
   }, []);
 
-  // Set selectedBusId based on exact registrationNo match (case-insensitive)
   useEffect(() => {
     const match = busOptions.find(
       (b) => b.registrationNo.toLowerCase() === busSearch.toLowerCase()
     );
-    if (match) {
-      setSelectedBusId(match.id);
-    } else {
-      setSelectedBusId(null);
-    }
+    setSelectedBusId(match ? match.id : null);
   }, [busSearch, busOptions, setSelectedBusId]);
 
-  // Suggestions for dropdown (partial match, not exact)
-  const filteredSuggestions = busOptions.filter(
-    (b) =>
-      busSearch &&
-      b.registrationNo.toLowerCase().includes(busSearch.toLowerCase()) &&
-      b.registrationNo.toLowerCase() !== busSearch.toLowerCase()
-  );
+  const parsedStart = customStart ? new Date(customStart) : undefined;
+  const parsedEnd = customEnd ? new Date(customEnd) : undefined;
 
   return (
     <section className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow border border-gray-200 dark:border-gray-700 space-y-6">
@@ -113,37 +90,12 @@ const BusTimeFilter: React.FC<Props> = ({
             className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-4 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-900 dark:text-white"
             autoComplete="off"
           />
-
-          {filteredSuggestions.length > 0 && (
-            <ul className="absolute z-10 w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 mt-1 rounded-md shadow max-h-40 overflow-y-auto">
-              {filteredSuggestions.map((b) => (
-                <li
-                  key={b.id}
-                  onClick={() => {
-                    setBusSearch(b.registrationNo);
-                    setSelectedBusId(b.id);
-                  }}
-                  className="px-4 py-2 cursor-pointer hover:bg-blue-100 dark:hover:bg-gray-700"
-                >
-                  {b.registrationNo}
-                </li>
-              ))}
-            </ul>
+          {busSearch && !selectedBusId && (
+            <p className="text-sm text-red-500 mt-2">
+              ⚠️ Bus not found. Please check the registration number.
+            </p>
           )}
         </div>
-
-        {/* Validation */}
-        {busSearch && !selectedBusId && (
-          <p className="text-sm text-red-500 mt-2">
-            ⚠️ Bus not found. Please check the registration number.
-          </p>
-        )}
-
-        {selectedBusId && (
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Selected Bus ID: <span className="font-semibold">{selectedBusId}</span>
-          </p>
-        )}
       </div>
 
       {/* Time Range */}
@@ -156,8 +108,9 @@ const BusTimeFilter: React.FC<Props> = ({
           onChange={(e) => {
             const val = e.target.value;
             setTimeRange(val);
-            setShowCustom(val === "Custom");
-            if (val !== "Custom") {
+            if (val !== "custom") {
+              setCustomStart("");
+              setCustomEnd("");
               setShowStartPicker(false);
               setShowEndPicker(false);
             }
@@ -165,13 +118,15 @@ const BusTimeFilter: React.FC<Props> = ({
           className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-4 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-900 dark:text-white"
         >
           {timeOptions.map((option) => (
-            <option key={option}>{option}</option>
-          ))}
+  <option key={option} value={option}>
+    {option.charAt(0).toUpperCase() + option.slice(1)}
+  </option>
+))}
         </select>
       </div>
 
-      {/* Custom Range */}
-      {showCustom && (
+      {/* Custom Range Picker */}
+      {timeRange === "custom" && (
         <div className="flex flex-wrap gap-6 pt-2">
           {/* Start Date */}
           <div>
@@ -179,9 +134,9 @@ const BusTimeFilter: React.FC<Props> = ({
             {showStartPicker ? (
               <DayPicker
                 mode="single"
-                selected={startDate}
+                selected={parsedStart}
                 onSelect={(date) => {
-                  setStartDate(date);
+                  if (date) setCustomStart(date.toISOString());
                   setShowStartPicker(false);
                 }}
                 fromDate={new Date(2020, 0, 1)}
@@ -194,7 +149,7 @@ const BusTimeFilter: React.FC<Props> = ({
                 <p className="text-sm text-gray-700 dark:text-gray-300 mt-2">
                   Selected:{" "}
                   <span className="font-semibold">
-                    {startDate ? format(startDate, "PPP") : "Not selected"}
+                    {parsedStart ? format(parsedStart, "PPP") : "Not selected"}
                   </span>
                 </p>
                 <button
@@ -213,9 +168,9 @@ const BusTimeFilter: React.FC<Props> = ({
             {showEndPicker ? (
               <DayPicker
                 mode="single"
-                selected={endDate}
+                selected={parsedEnd}
                 onSelect={(date) => {
-                  setEndDate(date);
+                  if (date) setCustomEnd(date.toISOString());
                   setShowEndPicker(false);
                 }}
                 fromDate={new Date(2020, 0, 1)}
@@ -228,7 +183,7 @@ const BusTimeFilter: React.FC<Props> = ({
                 <p className="text-sm text-gray-700 dark:text-gray-300 mt-2">
                   Selected:{" "}
                   <span className="font-semibold">
-                    {endDate ? format(endDate, "PPP") : "Not selected"}
+                    {parsedEnd ? format(parsedEnd, "PPP") : "Not selected"}
                   </span>
                 </p>
                 <button

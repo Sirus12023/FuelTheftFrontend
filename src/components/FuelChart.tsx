@@ -22,7 +22,7 @@ interface RawReading {
 }
 
 interface ParsedDataPoint {
-  time: number | string;
+  time: number;
   fuelLevel: number;
   event: EventType;
   fuelChange?: number;
@@ -47,17 +47,22 @@ const LegendItem = ({ color, label }: { color: string; label: string }) => (
 );
 
 const FuelChart: React.FC<FuelChartProps> = ({ fuelData, busId }) => {
-  if (!fuelData.length) {
-    return (
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-6 mt-10 text-center text-gray-500 dark:text-gray-400">
-        No fuel data available for the selected date range.
-      </div>
-    );
-  }
+  // If no data, show message
+  // if (!fuelData || fuelData.length === 0) {
+  //   return (
+  //     <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-6 mt-10 text-center text-gray-500 dark:text-gray-400">
+  //       No fuel data available for the selected date range or bus.
+  //     </div>
+  //   );
+  // }
 
   // Parse and compute total theft using backend's "type" and "fuelChange"
   const { parsedData, totalTheft } = useMemo(() => {
-    const parsed: ParsedDataPoint[] = fuelData.map((d) => ({
+    // Sort by timestamp to ensure correct order
+    const sorted = [...fuelData].sort(
+      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    );
+    const parsed: ParsedDataPoint[] = sorted.map((d) => ({
       time: new Date(d.timestamp).getTime(),
       fuelLevel: d.fuelLevel,
       event: normalizeEvent(d.type),
@@ -102,7 +107,25 @@ const FuelChart: React.FC<FuelChartProps> = ({ fuelData, busId }) => {
     }
   };
 
-  const isDark = typeof document !== "undefined" && document.documentElement.classList.contains("dark");
+  // Use a stateful check for dark mode to avoid hydration mismatch
+  const [isDark, setIsDark] = React.useState(false);
+  React.useEffect(() => {
+    if (typeof document !== "undefined") {
+      setIsDark(document.documentElement.classList.contains("dark"));
+    }
+  }, []);
+
+  // Defensive: handle if timestamps are missing or invalid
+  const firstTimestamp = fuelData[0]?.timestamp;
+  const lastTimestamp = fuelData[fuelData.length - 1]?.timestamp;
+  let fromStr = "N/A";
+  let toStr = "N/A";
+  try {
+    if (firstTimestamp) fromStr = format(new Date(firstTimestamp), "PPpp");
+    if (lastTimestamp) toStr = format(new Date(lastTimestamp), "PPpp");
+  } catch {
+    // ignore
+  }
 
   return (
     <section className="bg-white dark:bg-gray-800 rounded-xl shadow p-6 mt-10">
@@ -117,8 +140,8 @@ const FuelChart: React.FC<FuelChartProps> = ({ fuelData, busId }) => {
 
       <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
         Showing data from{" "}
-        <strong>{format(new Date(fuelData[0].timestamp), "PPpp")}</strong> to{" "}
-        <strong>{format(new Date(fuelData[fuelData.length - 1].timestamp), "PPpp")}</strong>
+        <strong>{fromStr}</strong> to{" "}
+        <strong>{toStr}</strong>
       </p>
 
       <ResponsiveContainer width="100%" height={300}>
@@ -126,7 +149,13 @@ const FuelChart: React.FC<FuelChartProps> = ({ fuelData, busId }) => {
           <CartesianGrid stroke={isDark ? "#374151" : "#ccc"} strokeDasharray="3 3" />
           <XAxis
             dataKey="time"
-            tickFormatter={(value) => format(new Date(value), "HH:mm")}
+            tickFormatter={(value) => {
+              try {
+                return format(new Date(value), "HH:mm");
+              } catch {
+                return "";
+              }
+            }}
             type="number"
             domain={["dataMin", "dataMax"]}
             scale="time"
@@ -134,11 +163,22 @@ const FuelChart: React.FC<FuelChartProps> = ({ fuelData, busId }) => {
           />
           <YAxis
             domain={[0, "auto"]}
-            label={{ value: "Fuel (Litres)", angle: -90, position: "insideLeft", fill: isDark ? "#d1d5db" : "#374151" }}
+            label={{
+              value: "Fuel (Litres)",
+              angle: -90,
+              position: "insideLeft",
+              fill: isDark ? "#d1d5db" : "#374151",
+            }}
             tick={{ fill: isDark ? "#d1d5db" : "#374151", fontSize: 12 }}
           />
           <Tooltip
-            labelFormatter={(label) => format(new Date(label), "PPpp")}
+            labelFormatter={(label) => {
+              try {
+                return format(new Date(label), "PPpp");
+              } catch {
+                return "";
+              }
+            }}
             formatter={(
               value: number,
               name: string,
@@ -189,10 +229,9 @@ const FuelChart: React.FC<FuelChartProps> = ({ fuelData, busId }) => {
               );
             }}
             activeDot={(props) => {
-  const { cx, cy } = props;
-  return <circle cx={cx} cy={cy} r={6} fill="#3b82f6" stroke="#000" strokeWidth={1} />;
-}}
-
+              const { cx, cy } = props;
+              return <circle cx={cx} cy={cy} r={6} fill="#3b82f6" stroke="#000" strokeWidth={1} />;
+            }}
           />
         </LineChart>
       </ResponsiveContainer>
