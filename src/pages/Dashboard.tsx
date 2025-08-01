@@ -1,6 +1,6 @@
 // src/pages/Dashboard.tsx
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import { API_BASE_URL } from "../config";
 import MonitoredBusCard from "../components/MonitoredBusCard";
@@ -73,90 +73,25 @@ const Dashboard: React.FC = () => {
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
 
-  useEffect(() => {
-    const fetchDashboard = async () => {
-      try {
-        setLoading(true);
-        const res = await axios.get<Bus[]>(`${API_BASE_URL}/vehicles`);
-        const buses = res.data;
-
-        const enriched: BusCard[] = await Promise.all(
-          buses.map(async (bus) => {
-            try {
-              const detailsRes = await axios.get<any>(
-                `${API_BASE_URL}/vehicles/${bus.id}/details?include=readings,alerts,sensor`
-              );
-              const details = detailsRes.data;
-
-              const readings = details.sensor?.readings ?? details.readings ?? [];
-              const latestFuel = readings.length > 0 ? readings.at(-1).fuelLevel : 0;
-              const isSensorActive = details.sensor?.isActive !== false;
-
-              return {
-                 busId: bus.id,
-                registrationNo: bus.registrationNo,
-                driverName: bus.driver || details.driver?.name || "Unknown",
-                routeName: bus.route || details.route?.name || "Unknown",
-                fuelLevel: latestFuel,
-                status: isSensorActive ? "normal" : "offline",
-              };
-            } catch {
-              return {
-                busId: bus.id,
-                registrationNo: bus.registrationNo,
-                driverName: bus.driver || "Unknown",
-                routeName: bus.route || "Unknown",
-                fuelLevel: 0,
-                status: "offline",
-              };
-            }
-          })
-        );
-
-        setTopBuses(enriched);
-        setTotalBuses(buses.length);
-
-        if (enriched.length > 0 && !selectedBus) {
-          setSelectedBus(enriched[0].busId);
-        }
-
-        setError(null);
-      } catch (err) {
-        console.error("Dashboard fetch error:", err);
-        setError("Failed to load dashboard data.");
-      } finally {
-        setLoading(false);
+  // Helper to fetch bus details for a given bus and time range
+  const fetchBusDetails = useCallback(
+    async (busId: string, range: { startDate?: Date; endDate?: Date }) => {
+      if (!busId || !range?.startDate || !range?.endDate) {
+        setFuelData([]);
+        setEvents([]);
+        setFuelStats(null);
+        return;
       }
-    };
-
-    fetchDashboard();
-  }, []);
-
-  useEffect(() => {
-    if (!selectedBus) return;
-
-    const range =
-      timeRange === "custom"
-        ? {
-            startDate: customStart ? new Date(customStart) : undefined,
-            endDate: customEnd ? new Date(customEnd) : undefined,
-          }
-        : getDateRange(toTitleCase(timeRange));
-
-    const startDate = range?.startDate;
-    const endDate = range?.endDate;
-    if (!startDate || !endDate) return;
-
-    const fetchBusDetails = async () => {
       try {
         setLoading(true);
+        // Fetch bus details (readings, alerts, sensor)
         const res = await axios.get<any>(
-          `${API_BASE_URL}/vehicles/${selectedBus}/details`,
+          `${API_BASE_URL}/vehicles/${busId}/details`,
           {
             params: {
               include: "readings,alerts,sensor",
-              fromDate: startDate.toISOString(),
-              toDate: endDate.toISOString(),
+              fromDate: range.startDate.toISOString(),
+              toDate: range.endDate.toISOString(),
             },
           }
         );
@@ -181,13 +116,14 @@ const Dashboard: React.FC = () => {
         setFuelData(enriched);
         setEvents(alerts);
 
+        // Fetch fuel usage stats
         const usage = await axios.get<FuelUsageStats>(
           `${API_BASE_URL}/fuelusage`,
           {
             params: {
-              busId: selectedBus,
-              fromDate: startDate.toISOString(),
-              toDate: endDate.toISOString(),
+              busId: busId,
+              fromDate: range.startDate.toISOString(),
+              toDate: range.endDate.toISOString(),
             },
           }
         );
@@ -200,14 +136,110 @@ const Dashboard: React.FC = () => {
         setError(null);
       } catch (err) {
         console.error("Bus detail fetch error:", err);
+        setFuelData([]);
+        setEvents([]);
+        setFuelStats(null);
         setError("Failed to load bus details.");
+      } finally {
+        setLoading(false);
+      }
+    },
+    []
+  );
+
+  // Fetch dashboard buses on mount
+  useEffect(() => {
+    const fetchDashboard = async () => {
+      try {
+        setLoading(true);
+        const res = await axios.get<Bus[]>(`${API_BASE_URL}/vehicles`);
+        const buses = res.data;
+
+        const enriched: BusCard[] = await Promise.all(
+          buses.map(async (bus) => {
+            try {
+              const detailsRes = await axios.get<any>(
+                `${API_BASE_URL}/vehicles/${bus.id}/details?include=readings,alerts,sensor`
+              );
+              const details = detailsRes.data;
+
+              const readings = details.sensor?.readings ?? details.readings ?? [];
+              const latestFuel = readings.length > 0 ? readings.at(-1).fuelLevel : 0;
+              const isSensorActive = details.sensor?.isActive !== false;
+
+              return {
+                busId: bus.id,
+                registrationNo: bus.registrationNo,
+                driverName: bus.driver || details.driver?.name || "Unknown",
+                routeName: bus.route || details.route?.name || "Unknown",
+                fuelLevel: latestFuel,
+                status: isSensorActive ? "normal" : "offline",
+              };
+            } catch {
+              return {
+                busId: bus.id,
+                registrationNo: bus.registrationNo,
+                driverName: bus.driver || "Unknown",
+                routeName: bus.route || "Unknown",
+                fuelLevel: 0,
+                status: "offline",
+              };
+            }
+          })
+        );
+
+        setTopBuses(enriched);
+        setTotalBuses(buses.length);
+
+        // If no bus is selected, select the first one and fetch its details
+        if (enriched.length > 0 && !selectedBus) {
+          setSelectedBus(enriched[0].busId);
+        }
+
+        setError(null);
+      } catch (err) {
+        console.error("Dashboard fetch error:", err);
+        setError("Failed to load dashboard data.");
       } finally {
         setLoading(false);
       }
     };
 
-    fetchBusDetails();
-  }, [selectedBus, timeRange, customStart, customEnd]);
+    fetchDashboard();
+    // eslint-disable-next-line
+  }, []);
+
+  // Fetch bus details when selectedBus or time range changes
+  useEffect(() => {
+    if (!selectedBus) {
+      setFuelData([]);
+      setEvents([]);
+      setFuelStats(null);
+      return;
+    }
+
+    const range =
+      timeRange === "custom"
+        ? {
+            startDate: customStart ? new Date(customStart) : undefined,
+            endDate: customEnd ? new Date(customEnd) : undefined,
+          }
+        : getDateRange(toTitleCase(timeRange));
+
+    if (!range?.startDate || !range?.endDate) {
+      setFuelData([]);
+      setEvents([]);
+      setFuelStats(null);
+      return;
+    }
+
+    fetchBusDetails(selectedBus, range);
+  }, [selectedBus, timeRange, customStart, customEnd, fetchBusDetails]);
+
+  // Handler for bus card click: set selected bus and fetch its data for current time range
+  const handleBusCardClick = (busId: string) => {
+    setSelectedBus(busId);
+  };
 
   if (loading && topBuses.length === 0) {
     return (
@@ -300,7 +332,7 @@ const Dashboard: React.FC = () => {
             fuelLevel={bus.fuelLevel}
             status={bus.status}
             imageUrl={busImage}
-            onClick={() => setSelectedBus(bus.busId)}
+            onClick={() => handleBusCardClick(bus.busId)}
             selected={selectedBus === bus.busId}
           />
         ))}
