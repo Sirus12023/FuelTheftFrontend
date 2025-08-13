@@ -1,81 +1,63 @@
+// utils/dateRangeFromTimeOption.ts
 import {
-  startOfToday,
-  endOfToday,
-  subDays,
-  startOfWeek,
-  endOfWeek,
-  startOfMonth,
-  endOfMonth,
-  startOfDay,
-  endOfDay,
+  startOfToday, endOfToday, subDays, startOfWeek, endOfWeek,
+  startOfMonth, endOfMonth, startOfDay, endOfDay,
 } from "date-fns";
 
-/**
- * Returns a date range object { startDate, endDate } based on the backend's expected time options.
- * The backend expects ISO strings for fromDate/toDate, and week starts on Monday.
- */
-export function getDateRange(timeRange: string): {
-  startDate?: Date;
-  endDate?: Date;
-} {
+export function getDateRange(timeRange: string): { startDate?: Date; endDate?: Date } {
+  const key = (timeRange || "").toLowerCase();
   const now = new Date();
 
-  switch (timeRange) {
+  switch (key) {
     case "last 24 hours":
-      return {
-        startDate: new Date(now.getTime() - 24 * 60 * 60 * 1000),
-        endDate: now,
-      };
+    case "last24hours":
+    case "24h":
+      return { startDate: new Date(now.getTime() - 24 * 60 * 60 * 1000), endDate: now };
 
     case "today":
-      return {
-        startDate: startOfToday(),
-        endDate: endOfToday(),
-      };
+      return { startDate: startOfToday(), endDate: endOfToday() };
 
     case "yesterday": {
-      const yesterday = subDays(now, 1);
-      return {
-        startDate: startOfDay(yesterday),
-        endDate: endOfDay(yesterday),
-      };
+      const y = subDays(now, 1);
+      return { startDate: startOfDay(y), endDate: endOfDay(y) };
     }
 
+    // Rolling windows (normalized to full days)
+    case "week":
+    case "last 7 days": {
+      const start = startOfDay(subDays(now, 6));
+      const end = endOfDay(now);
+      return { startDate: start, endDate: end };
+    }
+
+    case "month":
+    case "last 30 days": {
+      const start = startOfDay(subDays(now, 29));
+      const end = endOfDay(now);
+      return { startDate: start, endDate: end };
+    }
+
+    // Calendar windows
     case "this week":
-      return {
-        startDate: startOfWeek(now, { weekStartsOn: 1 }),
-        endDate: endOfWeek(now, { weekStartsOn: 1 }),
-      };
+      return { startDate: startOfWeek(now, { weekStartsOn: 1 }), endDate: endOfWeek(now, { weekStartsOn: 1 }) };
 
     case "last week": {
-      const lastWeekStart = subDays(startOfWeek(now, { weekStartsOn: 1 }), 7);
-      const lastWeekEnd = subDays(endOfWeek(now, { weekStartsOn: 1 }), 7);
-      return {
-        startDate: lastWeekStart,
-        endDate: lastWeekEnd,
-      };
+      const s = subDays(startOfWeek(now, { weekStartsOn: 1 }), 7);
+      const e = subDays(endOfWeek(now, { weekStartsOn: 1 }), 7);
+      return { startDate: s, endDate: e };
     }
 
     case "this month":
-      return {
-        startDate: startOfMonth(now),
-        endDate: endOfMonth(now),
-      };
+      return { startDate: startOfMonth(now), endDate: endOfMonth(now) };
 
     case "last month": {
-      const lastMonthDate = subDays(startOfMonth(now), 1);
-      return {
-        startDate: startOfMonth(lastMonthDate),
-        endDate: endOfMonth(lastMonthDate),
-      };
+      const lm = subDays(startOfMonth(now), 1);
+      return { startDate: startOfMonth(lm), endDate: endOfMonth(lm) };
     }
 
     case "all time":
-      return {}; // No date filtering
-
     case "custom":
     default:
-      return {}; // Let UI provide custom dates
+      return {};
   }
 }
-

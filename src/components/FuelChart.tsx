@@ -1,24 +1,15 @@
 import React, { useMemo } from "react";
 import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  CartesianGrid,
+  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from "recharts";
 import { format } from "date-fns";
+import type { FuelReading } from "../types/fuel";
 
-// Backend now uses "type" for event type and "fuelChange" for change in fuel (see /alerts and /fuel endpoints)
 type EventType = "REFUEL" | "THEFT" | "DROP" | "NORMAL";
 
-interface RawReading {
-  timestamp: string;
-  fuelLevel: number;
-  type?: string; // backend: "REFUEL", "THEFT", "DROP", etc.
-  fuelChange?: number; // backend: change in fuel (litres), can be positive or negative
-  description?: string;
+interface FuelChartProps {
+  fuelData: FuelReading[];
+  busId: string;
 }
 
 interface ParsedDataPoint {
@@ -29,12 +20,6 @@ interface ParsedDataPoint {
   description?: string;
 }
 
-interface FuelChartProps {
-  fuelData: RawReading[];
-  busId: string;
-}
-
-// Normalize backend event type to our EventType
 const normalizeEvent = (rawType?: string): EventType => {
   const upper = rawType?.toUpperCase();
   return (["REFUEL", "THEFT", "DROP"].includes(upper || "") ? upper : "NORMAL") as EventType;
@@ -42,90 +27,74 @@ const normalizeEvent = (rawType?: string): EventType => {
 
 const LegendItem = ({ color, label }: { color: string; label: string }) => (
   <div className="flex items-center gap-2">
-    <div className="w-3 h-3" style={{ backgroundColor: color, borderRadius: "2px" }} /> {label}
+    <div className="w-3 h-3" style={{ backgroundColor: color, borderRadius: 2 }} /> {label}
   </div>
 );
 
-const FuelChart: React.FC<FuelChartProps> = ({ fuelData, busId }) => {
-  // If no data, show message
-  // if (!fuelData || fuelData.length === 0) {
-  //   return (
-  //     <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-6 mt-10 text-center text-gray-500 dark:text-gray-400">
-  //       No fuel data available for the selected date range or bus.
-  //     </div>
-  //   );
-  // }
+const EPS = 0.2;
 
-  // Parse and compute total theft using backend's "type" and "fuelChange"
-  const { parsedData, totalTheft } = useMemo(() => {
-    // Sort by timestamp to ensure correct order
-    const sorted = [...fuelData].sort(
-      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-    );
+const FuelChart: React.FC<FuelChartProps> = ({ fuelData, busId }) => {
+  // HOOKS MUST COME FIRST (unconditional)
+  const [isDark, setIsDark] = React.useState(false);
+  React.useEffect(() => {
+    setIsDark(document.documentElement.classList.contains("dark"));
+  }, []);
+
+  const { parsedData, totalTheft, fromStr, toStr } = useMemo(() => {
+    const sorted = [...(fuelData || [])]
+      .filter(d => d && d.timestamp && !Number.isNaN(new Date(d.timestamp as any).getTime()))
+      .sort((a, b) => new Date(a.timestamp as any).getTime() - new Date(b.timestamp as any).getTime());
+
     const parsed: ParsedDataPoint[] = sorted.map((d) => ({
-      time: new Date(d.timestamp).getTime(),
+      time: new Date(d.timestamp as any).getTime(),
       fuelLevel: d.fuelLevel,
-      event: normalizeEvent(d.type),
-      fuelChange: d.fuelChange,
-      description: d.description,
+      event: normalizeEvent((d as any).eventType || (d as any).type),
+      fuelChange: (d as any).fuelChange,
+      description: (d as any).description,
     }));
 
-    // Compute total theft using backend's "fuelChange" for THEFT events
     let theft = 0;
     for (let i = 0; i < parsed.length; i++) {
-      if (parsed[i]?.event === "THEFT") {
-        // Prefer backend's fuelChange if present and negative
-        const fuelChange = parsed[i]?.fuelChange;
-        if (typeof fuelChange === "number" && fuelChange < -0.2) {
-          theft += Math.abs(fuelChange);
-        } else if (
-          i > 0 &&
-          typeof parsed[i - 1]?.fuelLevel === "number" &&
-          typeof parsed[i]?.fuelLevel === "number" &&
-          parsed[i - 1].fuelLevel > parsed[i].fuelLevel
-        ) {
-          // Fallback: compute drop if backend didn't provide fuelChange
+      if (parsed[i].event === "THEFT") {
+        const fc = parsed[i].fuelChange;
+        if (typeof fc === "number" && fc < -EPS) {
+          theft += Math.abs(fc);
+        } else if (i > 0) {
           const drop = parsed[i - 1].fuelLevel - parsed[i].fuelLevel;
-          if (drop > 0.2) theft += drop;
+          if (drop > EPS) theft += drop;
         }
       }
     }
 
-    return { parsedData: parsed, totalTheft: theft };
+    let fromStr = "N/A";
+    let toStr = "N/A";
+    if (parsed.length > 0) {
+      try {
+        fromStr = format(new Date(parsed[0].time), "PPpp");
+        toStr = format(new Date(parsed[parsed.length - 1].time), "PPpp");
+      } catch {}
+    }
+
+    return { parsedData: parsed, totalTheft: theft, fromStr, toStr };
   }, [fuelData]);
+
+  // SAFE EARLY RETURN AFTER HOOKS
+  if (!parsedData || parsedData.length === 0) {
+    return (
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-6 mt-10 text-center text-gray-500 dark:text-gray-400">
+        No fuel data available for the selected date range or bus.
+      </div>
+    );
+  }
 
   const getDotColor = (event: EventType) => {
     switch (event) {
-      case "THEFT":
-        return "#ef4444";
-      case "REFUEL":
-        return "#10b981";
-      case "DROP":
-        return "#f59e0b";
-      default:
-        return "#3b82f6";
+      case "THEFT": return "#ef4444";
+      case "REFUEL": return "#10b981";
+      case "DROP": return "#f59e0b";
+      default: return "#3b82f6";
     }
   };
-
-  // Use a stateful check for dark mode to avoid hydration mismatch
-  const [isDark, setIsDark] = React.useState(false);
-  React.useEffect(() => {
-    if (typeof document !== "undefined") {
-      setIsDark(document.documentElement.classList.contains("dark"));
-    }
-  }, []);
-
-  // Defensive: handle if timestamps are missing or invalid
-  const firstTimestamp = fuelData[0]?.timestamp;
-  const lastTimestamp = fuelData[fuelData.length - 1]?.timestamp;
-  let fromStr = "N/A";
-  let toStr = "N/A";
-  try {
-    if (firstTimestamp) fromStr = format(new Date(firstTimestamp), "PPpp");
-    if (lastTimestamp) toStr = format(new Date(lastTimestamp), "PPpp");
-  } catch {
-    // ignore
-  }
 
   return (
     <section className="bg-white dark:bg-gray-800 rounded-xl shadow p-6 mt-10">
@@ -139,9 +108,7 @@ const FuelChart: React.FC<FuelChartProps> = ({ fuelData, busId }) => {
       </div>
 
       <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-        Showing data from{" "}
-        <strong>{fromStr}</strong> to{" "}
-        <strong>{toStr}</strong>
+        Showing data from <strong>{fromStr}</strong> to <strong>{toStr}</strong> ({parsedData.length} data points)
       </p>
 
       <ResponsiveContainer width="100%" height={300}>
@@ -149,13 +116,7 @@ const FuelChart: React.FC<FuelChartProps> = ({ fuelData, busId }) => {
           <CartesianGrid stroke={isDark ? "#374151" : "#ccc"} strokeDasharray="3 3" />
           <XAxis
             dataKey="time"
-            tickFormatter={(value) => {
-              try {
-                return format(new Date(value), "HH:mm");
-              } catch {
-                return "";
-              }
-            }}
+            tickFormatter={(value) => { try { return format(new Date(value), "HH:mm"); } catch { return ""; } }}
             type="number"
             domain={["dataMin", "dataMax"]}
             scale="time"
@@ -163,52 +124,28 @@ const FuelChart: React.FC<FuelChartProps> = ({ fuelData, busId }) => {
           />
           <YAxis
             domain={[0, "auto"]}
-            label={{
-              value: "Fuel (Litres)",
-              angle: -90,
-              position: "insideLeft",
-              fill: isDark ? "#d1d5db" : "#374151",
-            }}
+            label={{ value: "Fuel (Litres)", angle: -90, position: "insideLeft", fill: isDark ? "#d1d5db" : "#374151" }}
             tick={{ fill: isDark ? "#d1d5db" : "#374151", fontSize: 12 }}
           />
           <Tooltip
-            labelFormatter={(label) => {
-              try {
-                return format(new Date(label), "PPpp");
-              } catch {
-                return "";
-              }
-            }}
-            formatter={(
-              value: number,
-              name: string,
-              props: any
-            ) => {
+            labelFormatter={(label) => { try { return format(new Date(label), "PPpp"); } catch { return ""; } }}
+            formatter={(value: number, _name: string, props: any) => {
               const event = props?.payload?.event || "NORMAL";
               const description = props?.payload?.description;
-              const fuelChange = props?.payload?.fuelChange;
+              const fuelChange = props?.payload?.fuelChange as number | undefined;
+
               if (event !== "NORMAL") {
-                let eventLabel = event.charAt(0) + event.slice(1).toLowerCase();
-                let changeStr =
-                  typeof fuelChange === "number"
+                const eventLabel = event.charAt(0) + event.slice(1).toLowerCase();
+                const changeStr =
+                  typeof fuelChange === "number" && Math.abs(fuelChange) > EPS
                     ? ` (${fuelChange > 0 ? "+" : ""}${fuelChange.toFixed(2)} L)`
                     : "";
-                return [
-                  `${value} L`,
-                  `${eventLabel}${changeStr}: ${description || "Detected Event"}`,
-                ];
+                return [`${value} L`, `${eventLabel}${changeStr}: ${description || "Detected Event"}`];
               }
               return [`${value} L`, "Fuel Level"];
             }}
-            contentStyle={{
-              backgroundColor: isDark ? "#1f2937" : "#fff",
-              border: "none",
-              color: isDark ? "#f3f4f6" : "#1f2937",
-              fontSize: "14px",
-            }}
-            labelStyle={{
-              color: isDark ? "#d1d5db" : "#4b5563",
-            }}
+            contentStyle={{ backgroundColor: isDark ? "#1f2937" : "#fff", border: "none", color: isDark ? "#f3f4f6" : "#1f2937", fontSize: "14px" }}
+            labelStyle={{ color: isDark ? "#d1d5db" : "#4b5563" }}
           />
           <Line
             type="monotone"
@@ -217,19 +154,10 @@ const FuelChart: React.FC<FuelChartProps> = ({ fuelData, busId }) => {
             strokeWidth={2}
             dot={({ cx, cy, payload }) => {
               const event = (payload as ParsedDataPoint).event;
-              return (
-                <circle
-                  cx={cx}
-                  cy={cy}
-                  r={4}
-                  fill={getDotColor(event)}
-                  stroke="#fff"
-                  strokeWidth={1}
-                />
-              );
+              return <circle cx={cx} cy={cy} r={4} fill={getDotColor(event)} stroke="#fff" strokeWidth={1} />;
             }}
             activeDot={(props) => {
-              const { cx, cy } = props;
+              const { cx, cy } = props as any;
               return <circle cx={cx} cy={cy} r={6} fill="#3b82f6" stroke="#000" strokeWidth={1} />;
             }}
           />
@@ -240,6 +168,7 @@ const FuelChart: React.FC<FuelChartProps> = ({ fuelData, busId }) => {
         <LegendItem color="#ef4444" label="Theft" />
         <LegendItem color="#10b981" label="Refuel" />
         <LegendItem color="#f59e0b" label="Drop" />
+        <LegendItem color="#3b82f6" label="Normal" />
       </div>
     </section>
   );

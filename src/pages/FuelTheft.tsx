@@ -1,7 +1,6 @@
-// pages/FuelTheft.tsx
-
-import React, { useEffect, useState } from "react";
-import { useLocation } from "react-router-dom";
+// src/pages/FuelTheft.tsx
+import React, { useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { API_BASE_URL } from "../config";
 import BusTimeFilter from "../components/BusTimeFilter";
@@ -10,6 +9,12 @@ import MonitoredBusCard from "../components/MonitoredBusCard";
 import { getDateRange } from "../utils/dateRangeFromTimeOption";
 import FuelStatsGrid from "../components/FuelStatsGrid";
 import { markFuelEvents } from "../utils/markFuelEvents";
+import type { FuelReading } from "../types/fuel";
+
+// If your backend expects `busId` instead of `vehicleId` for /sensor, switch here
+const SENSOR_ID_PARAM = "vehicleId" as const; // change to "busId" if backend needs that
+
+type ISODate = string;
 
 interface FuelUsageStats {
   totalFuelConsumed: number;
@@ -19,17 +24,31 @@ interface FuelUsageStats {
   fuelEfficiency: number;
 }
 
+interface Alert {
+  id: string;
+  timestamp: ISODate;
+  type: string;
+  description?: string;
+}
+
 interface VehicleDetailResponse {
   registrationNo?: string;
   driver?: { name?: string };
   route?: { name?: string };
-  alerts?: any[];
-  readings?: any[];
+  alerts?: Alert[];
+  readings?: FuelReading[];
   sensor?: {
-    alerts?: any[];
-    readings?: any[];
+    alerts?: Alert[];
+    readings?: FuelReading[];
     isActive?: boolean;
   };
+}
+
+interface Vehicle {
+  id: string;
+  registrationNo: string;
+  driver?: { name?: string };
+  route?: { name?: string };
 }
 
 interface BusDetails {
@@ -40,37 +59,74 @@ interface BusDetails {
   status: "normal" | "offline";
 }
 
-const toTitleCase = (str: string) =>
-  str
-    .split(" ")
-    .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
-    .join(" ");
-
 const FuelTheft: React.FC = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const query = new URLSearchParams(location.search);
-  const initialBus = query.get("bus");
+  const initialRegNo = query.get("bus"); // bus query param = registration number
 
-  const [selectedBus, setSelectedBus] = useState<string | null>(null);
+  // bootstrap vehicles for suggestions + id mapping
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const regToId = useMemo(() => {
+    const map: Record<string, string> = {};
+    vehicles.forEach((v) => {
+      map[v.registrationNo] = v.id;
+    });
+    return map;
+  }, [vehicles]);
+
+  // UI State
+  const [selectedReg, setSelectedReg] = useState<string | null>(null); // registration number for UI/URL
+  const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null); // internal id for API calls
   const [search, setSearch] = useState("");
   const [timeRange, setTimeRange] = useState("today");
   const [customStart, setCustomStart] = useState<string>("");
   const [customEnd, setCustomEnd] = useState<string>("");
 
-  const [fuelData, setFuelData] = useState<any[]>([]);
+  const [fuelData, setFuelData] = useState<FuelReading[]>([]);
   const [busDetails, setBusDetails] = useState<BusDetails | null>(null);
   const [fuelStats, setFuelStats] = useState<FuelUsageStats | null>(null);
   const [noData, setNoData] = useState(false);
 
+  // Load vehicles once
   useEffect(() => {
-    if (initialBus) {
-      setSelectedBus(initialBus);
-      setSearch(initialBus);
-    }
-  }, [initialBus]);
+    (async () => {
+      try {
+        const res = await axios.get<Vehicle[]>(`${API_BASE_URL}/vehicles`);
+        setVehicles(res.data || []);
+      } catch (e) {
+        console.error("Failed to load vehicles", e);
+      }
+    })();
+  }, []);
+
+  // Initialize selection from URL (?bus=REGNO)
+  useEffect(() => {
+    if (!initialRegNo || vehicles.length === 0) return;
+    setSelectedReg(initialRegNo);
+    setSearch(initialRegNo);
+    const id = regToId[initialRegNo];
+    setSelectedVehicleId(id || null);
+  }, [initialRegNo, vehicles, regToId]);
+
+  // Suggestions (sorted & de-duped)
+  const busSuggestions = useMemo(
+    () => Array.from(new Set(vehicles.map((v) => v.registrationNo))).sort(),
+    [vehicles]
+  );
+
+  // When the user picks a bus in the filter
+  const handleSelectBus = (regNo: string) => {
+    if (!regToId[regNo]) return; // ignore unknown
+    setSelectedReg(regNo);
+    setSearch(regNo);
+    setSelectedVehicleId(regToId[regNo]);
+    // keep URL shareable by reg no
+    navigate(`?bus=${encodeURIComponent(regNo)}`, { replace: false });
+  };
 
   useEffect(() => {
-    if (!selectedBus) {
+    if (!selectedVehicleId) {
       setFuelData([]);
       setBusDetails(null);
       setFuelStats(null);
@@ -78,6 +134,7 @@ const FuelTheft: React.FC = () => {
       return;
     }
 
+    // date range
     const range =
       timeRange === "custom"
         ? {
@@ -91,59 +148,73 @@ const FuelTheft: React.FC = () => {
 
     const fetchBusData = async () => {
       try {
-        const fromDate = startDate?.toISOString() ?? new Date().toISOString();
-        const toDate = endDate?.toISOString() ?? new Date().toISOString();
+        // Require both dates; if missing, default to today
+        const now = new Date();
+        const fromDate = (startDate ?? new Date(now.setHours(0, 0, 0, 0))).toISOString();
+        const toDate = (endDate ?? new Date()).toISOString();
 
         const res = await axios.get<VehicleDetailResponse>(
-          `${API_BASE_URL}/vehicles/${selectedBus}/details`,
+          `${API_BASE_URL}/vehicles/${selectedVehicleId}/details`,
           {
             params: {
               include: "readings,alerts,events",
-              from: fromDate,
-              to: toDate,
+              fromDate, // backend expects fromDate
+              toDate,   // backend expects toDate
             },
           }
         );
 
         const data = res.data;
         const alerts = data.sensor?.alerts ?? data.alerts ?? [];
-        const rawReadings = data.sensor?.readings ?? data.readings ?? [];
+        const rawReadings = (data.sensor?.readings ?? data.readings ?? []) as FuelReading[];
 
-        const readingsWithEvents = rawReadings.map((r: any) => {
-          const match = alerts.find((a: any) => a.timestamp === r.timestamp);
+        // tolerant event matching (±60s) and normalized shape
+        const readingsWithEvents: FuelReading[] = rawReadings.map((r) => {
+          const rTs = new Date(r.timestamp as any).getTime();
+          const match = alerts.find((a: any) => {
+            const aTs = new Date(a.timestamp).getTime();
+            return Math.abs(aTs - rTs) <= 60_000; // within 60 seconds
+          });
+
           return {
             ...r,
-            eventType: match?.type?.toUpperCase() || r.eventType?.toUpperCase(),
+            eventType: (match?.type || r.eventType || r.type || "NORMAL").toString().toUpperCase(),
+            description: (r as any).description ?? match?.description ?? null,
+            fuelChange:
+              typeof (r as any).fuelChange === "number" ? (r as any).fuelChange : undefined,
           };
         });
 
-        const readings = markFuelEvents(readingsWithEvents);
+        const readings = markFuelEvents(readingsWithEvents) as FuelReading[];
 
         setFuelData(readings);
         setNoData(readings.length === 0);
 
+        // Sensor status (switch SENSOR_ID_PARAM if your backend needs busId)
         let sensorStatus = true;
         try {
           const sensorRes = await axios.get(`${API_BASE_URL}/sensor`, {
-            params: { busId: selectedBus },
+            params: { [SENSOR_ID_PARAM]: selectedVehicleId },
           });
           const sensors = Array.isArray(sensorRes.data) ? sensorRes.data : [];
-          sensorStatus = sensors.length === 0 ? true : sensors.every((s: any) => s.isActive);
+          sensorStatus =
+            sensors.length === 0 ? true : sensors.every((s: any) => s.isActive !== false);
         } catch {
           sensorStatus = true;
         }
 
+        const v = vehicles.find((x) => x.id === selectedVehicleId);
         setBusDetails({
-          registrationNo: data.registrationNo ?? "Unknown",
-          driver: data.driver?.name ?? "Unassigned",
-          route: data.route?.name ?? "Unknown",
-          currentFuelLevel: rawReadings.at(-1)?.fuelLevel ?? 0,
+          registrationNo: data.registrationNo ?? v?.registrationNo ?? "Unknown",
+          driver: data.driver?.name ?? v?.driver?.name ?? "Unassigned",
+          route: data.route?.name ?? v?.route?.name ?? "Unknown",
+          currentFuelLevel: (rawReadings.at(-1)?.fuelLevel as number) ?? 0,
           status: sensorStatus ? "normal" : "offline",
         });
 
         const usage = await axios.get<FuelUsageStats>(`${API_BASE_URL}/fuelusage`, {
           params: {
-            busId: selectedBus,
+            busId: selectedVehicleId, // per backend route
             fromDate,
             toDate,
           },
@@ -160,7 +231,7 @@ const FuelTheft: React.FC = () => {
     };
 
     fetchBusData();
-  }, [selectedBus, timeRange, customStart, customEnd]);
+  }, [selectedVehicleId, timeRange, customStart, customEnd, vehicles]);
 
   return (
     <div className="px-6 py-12 max-w-6xl mx-auto space-y-10 font-sans text-gray-800 dark:text-gray-100">
@@ -177,18 +248,31 @@ const FuelTheft: React.FC = () => {
         <BusTimeFilter
           busSearch={search}
           setBusSearch={setSearch}
-          selectedBusId={selectedBus}
-          setSelectedBusId={setSelectedBus}
+          selectedBusId={selectedReg}
+          setSelectedBusId={(val: string | null) => {
+            if (val && regToId[val]) {
+              setSelectedReg(val);
+              setSearch(val);
+              setSelectedVehicleId(regToId[val]);
+              navigate(`?bus=${encodeURIComponent(val)}`, { replace: false });
+            } else {
+              setSelectedReg(null);
+              setSearch("");
+              setSelectedVehicleId(null);
+              navigate(`?`, { replace: false });
+            }
+          }}
           timeRange={timeRange}
           setTimeRange={setTimeRange}
           customStart={customStart}
           customEnd={customEnd}
           setCustomStart={setCustomStart}
           setCustomEnd={setCustomEnd}
+          busSuggestions={busSuggestions}
         />
       </div>
 
-      {!selectedBus && (
+      {!selectedVehicleId && (
         <div className="text-center py-24 px-4 border rounded-xl bg-gradient-to-br from-white to-blue-50 dark:from-gray-800 dark:to-gray-700 dark:border-gray-600 text-gray-600 dark:text-gray-300 animate-fade-in">
           <h3 className="text-2xl font-semibold mb-2">No Bus Selected</h3>
           <p>
@@ -198,16 +282,16 @@ const FuelTheft: React.FC = () => {
         </div>
       )}
 
-      {selectedBus && noData && (
+      {selectedVehicleId && noData && (
         <div className="text-center py-24 px-4 border rounded-xl bg-gradient-to-br from-white to-blue-50 dark:from-gray-800 dark:to-gray-700 dark:border-gray-600 text-gray-600 dark:text-gray-300 animate-fade-in">
           <h3 className="text-2xl font-semibold mb-2">No Data Available</h3>
           <p>No fuel data found for the selected bus and time range.</p>
         </div>
       )}
 
-      {selectedBus && busDetails && !noData && (
+      {selectedVehicleId && busDetails && !noData && (
         <MonitoredBusCard
-          busId={selectedBus}
+          busId={selectedVehicleId}
           regNumber={busDetails.registrationNo}
           driver={busDetails.driver}
           route={busDetails.route}
@@ -217,9 +301,9 @@ const FuelTheft: React.FC = () => {
         />
       )}
 
-      {selectedBus && !noData && (
+      {selectedVehicleId && !noData && (
         <>
-          <FuelChart fuelData={fuelData} busId={selectedBus} />
+          <FuelChart fuelData={fuelData} busId={selectedVehicleId} />
           {fuelStats && (
             <FuelStatsGrid
               stats={{
