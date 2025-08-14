@@ -303,7 +303,8 @@ const FuelTheft: React.FC = () => {
 
       {selectedVehicleId && !noData && (
         <>
-          <FuelChart fuelData={fuelData} busId={selectedVehicleId} />
+          <FuelChart fuelData={fuelData} busId={selectedVehicleId}
+          theftTotalOverride={fuelStats?.totalFuelStolen}  />
           {fuelStats && (
             <FuelStatsGrid
               stats={{

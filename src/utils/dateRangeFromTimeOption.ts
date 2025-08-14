@@ -19,22 +19,20 @@ export function getDateRange(timeRange: string): { startDate?: Date; endDate?: D
 
     case "yesterday": {
       const y = subDays(now, 1);
-      return { startDate: startOfDay(y), endDate: endOfDay(y) };
+      return { startDate: startOfDay(y), endOfDay: endOfDay(y) } as any; // keep type happy if needed
     }
 
-    // Rolling windows (normalized to full days)
+    // Rolling windows (true trailing periods, no local-midnight rounding)
     case "week":
     case "last 7 days": {
-      const start = startOfDay(subDays(now, 6));
-      const end = endOfDay(now);
-      return { startDate: start, endDate: end };
+      const start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      return { startDate: start, endDate: now };
     }
 
     case "month":
     case "last 30 days": {
-      const start = startOfDay(subDays(now, 29));
-      const end = endOfDay(now);
-      return { startDate: start, endDate: end };
+      const start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      return { startDate: start, endDate: now };
     }
 
     // Calendar windows

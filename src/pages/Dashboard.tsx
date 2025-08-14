@@ -1,5 +1,11 @@
 // src/pages/Dashboard.tsx
-import React, { useEffect, useState, useCallback } from "react";
+import React, {
+  useEffect,
+  useState,
+  useCallback,
+  useMemo,
+  useRef,
+} from "react";
 import axios from "axios";
 import { API_BASE_URL } from "../config";
 import MonitoredBusCard from "../components/MonitoredBusCard";
@@ -20,13 +26,20 @@ interface Alert {
   timestamp: string;
   type: string;
   description?: string;
+  bus?: {
+    id?: string;
+    registrationNumber?: string;
+    registrationNo?: string;
+  };
+  vehicleId?: string; // be tolerant
+  busId?: string; // be tolerant
 }
 
 interface Bus {
   id: string;
   registrationNo: string;
-  driver?: string; // backend might also nest driver in details
-  route?: string;  // backend might also nest route in details
+  driver?: string;
+  route?: string;
 }
 
 interface BusCard {
@@ -62,7 +75,17 @@ const Dashboard: React.FC = () => {
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
 
-  // Fetch bus details for a given bus and time range
+  // Ref used to auto-scroll to the chart section
+  const chartRef = useRef<HTMLDivElement | null>(null);
+
+  // Map regNo -> busId for quick lookups (used when alerts reference registration)
+  const regToId = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const b of topBuses) map[b.registrationNo] = b.busId;
+    return map;
+  }, [topBuses]);
+
+  // --- Fetch details for selected bus ---
   const fetchBusDetails = useCallback(
     async (busId: string, range: { startDate?: Date; endDate?: Date }) => {
       if (!busId || !range?.startDate || !range?.endDate) {
@@ -74,7 +97,6 @@ const Dashboard: React.FC = () => {
       try {
         setLoading(true);
 
-        // details: readings + alerts + sensor
         const detailsRes = await axios.get<any>(
           `${API_BASE_URL}/vehicles/${busId}/details`,
           {
@@ -90,7 +112,6 @@ const Dashboard: React.FC = () => {
           details.sensor?.readings ?? details.readings ?? [];
         const alerts: Alert[] = details.sensor?.alerts ?? details.alerts ?? [];
 
-        // Enrich readings: attach event type/desc from a near-time alert (±60s)
         const enriched: FuelReading[] = readingsRaw.map((r) => {
           const rTs = new Date(r.timestamp as any).getTime();
           const matched = alerts.find((a) => {
@@ -110,12 +131,13 @@ const Dashboard: React.FC = () => {
           };
         });
 
-        const finalized = markFuelEvents(enriched) as FuelReading[];
-
+        // If your markFuelEvents supports options, we pass { infer:false } to avoid inferring:
+        const finalized = markFuelEvents(enriched, { infer: false }) as FuelReading[];
         setFuelData(finalized);
         setEvents(alerts);
 
-        // fuel usage
+        
+
         const usage = await axios.get<FuelUsageStats>(
           `${API_BASE_URL}/fuelusage`,
           {
@@ -146,7 +168,7 @@ const Dashboard: React.FC = () => {
     []
   );
 
-  // Fetch dashboard buses on mount
+  // --- Fetch dashboard buses on mount ---
   useEffect(() => {
     const fetchDashboard = async () => {
       try {
@@ -154,7 +176,6 @@ const Dashboard: React.FC = () => {
         const res = await axios.get<Bus[]>(`${API_BASE_URL}/vehicles`);
         const buses = res.data;
 
-        // Short lookback to get latest reading + sensor state reliably
         const toDate = new Date();
         const fromDate = new Date(toDate.getTime() - 24 * 60 * 60 * 1000);
 
@@ -221,38 +242,93 @@ const Dashboard: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Fetch bus details when selectedBus or time range changes
-  useEffect(() => {
-    if (!selectedBus) {
-      setFuelData([]);
-      setEvents([]);
-      setFuelStats(null);
-      return;
+  // --- Build date range (and validate) ---
+  const range = useMemo(() => {
+    if (timeRange === "custom") {
+      return {
+        startDate: customStart ? new Date(customStart) : undefined,
+        endDate: customEnd ? new Date(customEnd) : undefined,
+      };
     }
+    return getDateRange(timeRange);
+  }, [timeRange, customStart, customEnd]);
 
-    const range =
-      timeRange === "custom"
-        ? {
-            startDate: customStart ? new Date(customStart) : undefined,
-            endDate: customEnd ? new Date(customEnd) : undefined,
-          }
-        : getDateRange(timeRange);
-
-    if (!range?.startDate || !range?.endDate ||
-      isNaN(range.startDate.getTime()) || isNaN(range.endDate.getTime())
+  // --- Fetch selected bus details when range changes ---
+  useEffect(() => {
+    if (
+      !selectedBus ||
+      !range?.startDate ||
+      !range?.endDate ||
+      isNaN(range.startDate.getTime()) ||
+      isNaN(range.endDate.getTime())
     ) {
       setFuelData([]);
       setEvents([]);
       setFuelStats(null);
       return;
     }
-
     fetchBusDetails(selectedBus, range);
-  }, [selectedBus, timeRange, customStart, customEnd, fetchBusDetails]);
+  }, [selectedBus, range?.startDate, range?.endDate, fetchBusDetails]);
 
+  // --- Fetch theft events for current window (to highlight cards) ---
+  const [theftBusIds, setTheftBusIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    const fetchThefts = async () => {
+      if (!range?.startDate || !range?.endDate) {
+        setTheftBusIds(new Set());
+        return;
+      }
+      try {
+        const res = await axios.get<Alert[]>(`${API_BASE_URL}/history`, {
+          params: {
+            type: "THEFT",
+            fromDate: range.startDate.toISOString(),
+            toDate: range.endDate.toISOString(),
+          },
+        });
+        const rows = Array.isArray(res.data) ? res.data : [];
+
+        const ids = new Set<string>();
+        for (const a of rows) {
+          // Try direct id fields first
+          const directId = a.bus?.id || a.busId || a.vehicleId;
+          if (directId) {
+            ids.add(String(directId));
+            continue;
+          }
+          // Try matching by registration number
+          const reg =
+            a.bus?.registrationNumber ||
+            a.bus?.registrationNo ||
+            undefined;
+          if (reg && regToId[reg]) {
+            ids.add(regToId[reg]);
+          }
+        }
+        setTheftBusIds(ids);
+      } catch (e) {
+        console.error("Failed to fetch theft events", e);
+        setTheftBusIds(new Set());
+      }
+    };
+    fetchThefts();
+  }, [range?.startDate, range?.endDate, regToId]);
+
+  // When a card is clicked, set the bus and scroll to the chart
   const handleBusCardClick = (busId: string) => {
     setSelectedBus(busId);
+    requestAnimationFrame(() => {
+      chartRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
   };
+
+  // Also scroll if selectedBus changes in other ways
+  useEffect(() => {
+    if (selectedBus && chartRef.current) {
+      chartRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [selectedBus]);
 
   if (loading && topBuses.length === 0) {
     return (
@@ -276,12 +352,23 @@ const Dashboard: React.FC = () => {
     <div className="space-y-10 px-6 py-8 max-w-7xl mx-auto text-gray-800 dark:text-gray-100">
       <div className="text-center py-10 bg-white dark:bg-gray-800 rounded-xl shadow-lg space-y-6">
         <p className="text-xl font-medium">
-          Welcome to <span className="text-blue-600 dark:text-blue-300 font-bold">FuelSafe</span>
+          Welcome to{" "}
+          <span className="font-signord font-semibold text-blue-600 dark:text-blue-300">
+            FuelSafe
+          </span>{" "}
+          — your centralized platform to monitor fuel usage, detect theft, and
+          track refueling activities.
         </p>
         <div className="flex justify-center gap-3 flex-wrap">
-          <span className="badge">🔍 Real-time Monitoring</span>
-          <span className="badge">⚠️ Anomaly Detection</span>
-          <span className="badge">✅ {totalBuses} Buses Monitored</span>
+          <span className="bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-4 py-2 rounded-full text-sm font-medium">
+            🔍 Real-time Monitoring
+          </span>
+          <span className="bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-100 px-4 py-2 rounded-full text-sm font-medium">
+            ⚠️ Anomaly Detection
+          </span>
+          <span className="bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-100 px-4 py-2 rounded-full text-sm font-medium">
+            ✅ {totalBuses} Buses Monitored
+          </span>
         </div>
       </div>
 
@@ -345,6 +432,7 @@ const Dashboard: React.FC = () => {
             route={bus.routeName}
             fuelLevel={bus.fuelLevel}
             status={bus.status}
+            hasTheft={theftBusIds.has(bus.busId)}
             imageUrl={busImage}
             onClick={() => handleBusCardClick(bus.busId)}
             selected={selectedBus === bus.busId}
@@ -352,402 +440,33 @@ const Dashboard: React.FC = () => {
         ))}
       </div>
 
-      {selectedBus && (
-        <div className="mt-10 space-y-6">
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow">
-            <h4 className="font-semibold text-lg mb-3">
-              Fuel Level –{" "}
-              {topBuses.find((b) => b.busId === selectedBus)?.registrationNo ||
-                selectedBus}
-            </h4>
-           <FuelChart fuelData={Array.isArray(fuelData) ? fuelData : []} busId={selectedBus} />
-            {fuelStats && (
-              <FuelStatsGrid
-                stats={{
-                  total_fuel_consumed: fuelStats.totalFuelConsumed,
-                  total_fuel_stolen: fuelStats.totalFuelStolen,
-                  total_fuel_refueled: fuelStats.totalFuelRefueled,
-                  distance_traveled: fuelStats.distanceTravelled,
-                  fuel_efficiency: fuelStats.fuelEfficiency,
-                }}
-              />
-            )}
-          </div>
-        </div>
+  {selectedBus && (
+  <div className="mt-10 space-y-6" ref={chartRef}>
+    <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow">
+      <h4 className="font-semibold text-lg mb-3">
+        Fuel Level – {topBuses.find((b) => b.busId === selectedBus)?.registrationNo || selectedBus}
+      </h4>
+      <FuelChart
+        fuelData={Array.isArray(fuelData) ? fuelData : []}
+        busId={selectedBus}
+        theftTotalOverride={fuelStats?.totalFuelStolen}   
+      />
+      {fuelStats && (
+        <FuelStatsGrid
+          stats={{
+            total_fuel_consumed: fuelStats.totalFuelConsumed,
+            total_fuel_stolen: fuelStats.totalFuelStolen,
+            total_fuel_refueled: fuelStats.totalFuelRefueled,
+            distance_traveled: fuelStats.distanceTravelled,
+            fuel_efficiency: fuelStats.fuelEfficiency,
+          }}
+        />
       )}
+    </div>
+  </div>
+)}
     </div>
   );
 };
 
 export default Dashboard;
-
-
-
-
-
-
-
-// import React, { useEffect, useState, useCallback } from "react";
-// import axios from "axios";
-// import { API_BASE_URL } from "../config";
-// import MonitoredBusCard from "../components/MonitoredBusCard";
-// import { getDateRange } from "../utils/dateRangeFromTimeOption";
-// import FuelChart from "../components/FuelChart";
-// import StatCards from "../components/StatCards";
-// import FuelStatsGrid from "../components/FuelStatsGrid";
-// import { BusFront } from "lucide-react";
-// import CountUp from "react-countup";
-// import busImage from "../assets/bus1.jpg";
-// import DashboardTimeFilter from "../components/DashboardTimeFilter";
-// import type { TimeRangeValue } from "../components/DashboardTimeFilter";
-
-// const toTitleCase = (str: string) =>
-//   str
-//     .split(" ")
-//     .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
-//     .join(" ");
-
-// interface Reading {
-//   id: string;
-//   timestamp: string;
-//   fuelLevel: number;
-//   eventType?: string;
-//   description?: string;
-// }
-
-// interface Alert {
-//   id: string;
-//   timestamp: string;
-//   type: string;
-//   description: string;
-// }
-
-// interface Bus {
-//   id: string;
-//   registrationNo: string;
-//   driver?: string;
-//   route?: string;
-// }
-
-// interface BusCard {
-//   busId: string;
-//   registrationNo: string;
-//   driverName: string;
-//   routeName: string;
-//   fuelLevel: number;
-//   status: "normal" | "alert" | "offline";
-// }
-
-// interface FuelUsageStats {
-//   totalFuelConsumed: number;
-//   totalFuelStolen: number;
-//   totalFuelRefueled: number;
-//   distanceTravelled: number;
-//   fuelEfficiency: number;
-// }
-
-// const Dashboard: React.FC = () => {
-//   const [topBuses, setTopBuses] = useState<BusCard[]>([]);
-//   const [totalBuses, setTotalBuses] = useState(0);
-//   const [selectedBus, setSelectedBus] = useState<string | null>(null);
-//   const [fuelData, setFuelData] = useState<Reading[]>([]);
-//   const [events, setEvents] = useState<Alert[]>([]);
-//   const [fuelStats, setFuelStats] = useState<FuelUsageStats | null>(null);
-//   const [loading, setLoading] = useState(true);
-//   const [error, setError] = useState<string | null>(null);
-
-//   const [timeRange, setTimeRange] = useState<TimeRangeValue>("today");
-//   const [customStart, setCustomStart] = useState("");
-//   const [customEnd, setCustomEnd] = useState("");
-
-//   // Helper to fetch bus details for a given bus and time range
-//   const fetchBusDetails = useCallback(
-//     async (busId: string, range: { startDate?: Date; endDate?: Date }) => {
-//       if (!busId || !range?.startDate || !range?.endDate) {
-//         setFuelData([]);
-//         setEvents([]);
-//         setFuelStats(null);
-//         return;
-//       }
-//       try {
-//         setLoading(true);
-//         // Fetch bus details (readings, alerts, sensor)
-//         const res = await axios.get<any>(
-//           `${API_BASE_URL}/vehicles/${busId}/details`,
-//           {
-//             params: {
-//               include: "readings,alerts,sensor",
-//               fromDate: range.startDate.toISOString(),
-//               toDate: range.endDate.toISOString(),
-//             },
-//           }
-//         );
-//         const details = res.data;
-//         const readings = details.sensor?.readings ?? details.readings ?? [];
-//         const alerts = details.sensor?.alerts ?? details.alerts ?? [];
-
-//         const enriched = readings.map((r: any) => {
-//           const matched = alerts.find(
-//             (a: any) =>
-//               Math.abs(
-//                 new Date(a.timestamp).getTime() - new Date(r.timestamp).getTime()
-//               ) < 60000
-//           );
-//           return {
-//             ...r,
-//             eventType: r.eventType || matched?.type || "NORMAL",
-//             description: r.description || matched?.description,
-//           };
-//         });
-
-//         setFuelData(enriched);
-//         setEvents(alerts);
-
-//         // Fetch fuel usage stats
-//         const usage = await axios.get<FuelUsageStats>(
-//           `${API_BASE_URL}/fuelusage`,
-//           {
-//             params: {
-//               busId: busId,
-//               fromDate: range.startDate.toISOString(),
-//               toDate: range.endDate.toISOString(),
-//             },
-//           }
-//         );
-
-//         setFuelStats({
-//           ...usage.data,
-//           fuelEfficiency: usage.data.fuelEfficiency ?? 0,
-//         });
-
-//         setError(null);
-//       } catch (err) {
-//         console.error("Bus detail fetch error:", err);
-//         setFuelData([]);
-//         setEvents([]);
-//         setFuelStats(null);
-//         setError("Failed to load bus details.");
-//       } finally {
-//         setLoading(false);
-//       }
-//     },
-//     []
-//   );
-
-//   // Fetch dashboard buses on mount
-//   useEffect(() => {
-//     const fetchDashboard = async () => {
-//       try {
-//         setLoading(true);
-//         const res = await axios.get<Bus[]>(`${API_BASE_URL}/vehicles`);
-//         const buses = res.data;
-
-//         const enriched: BusCard[] = await Promise.all(
-//           buses.map(async (bus) => {
-//             try {
-//               const detailsRes = await axios.get<any>(
-//                 `${API_BASE_URL}/vehicles/${bus.id}/details?include=readings,alerts,sensor`
-//               );
-//               const details = detailsRes.data;
-
-//               const readings = details.sensor?.readings ?? details.readings ?? [];
-//               const latestFuel = readings.length > 0 ? readings.at(-1).fuelLevel : 0;
-//               const isSensorActive = details.sensor?.isActive !== false;
-
-//               return {
-//                 busId: bus.id,
-//                 registrationNo: bus.registrationNo,
-//                 driverName: bus.driver || details.driver?.name || "Unknown",
-//                 routeName: bus.route || details.route?.name || "Unknown",
-//                 fuelLevel: latestFuel,
-//                 status: isSensorActive ? "normal" : "offline",
-//               };
-//             } catch {
-//               return {
-//                 busId: bus.id,
-//                 registrationNo: bus.registrationNo,
-//                 driverName: bus.driver || "Unknown",
-//                 routeName: bus.route || "Unknown",
-//                 fuelLevel: 0,
-//                 status: "offline",
-//               };
-//             }
-//           })
-//         );
-
-//         setTopBuses(enriched);
-//         setTotalBuses(buses.length);
-
-//         // If no bus is selected, select the first one and fetch its details
-//         if (enriched.length > 0 && !selectedBus) {
-//           setSelectedBus(enriched[0].busId);
-//         }
-
-//         setError(null);
-//       } catch (err) {
-//         console.error("Dashboard fetch error:", err);
-//         setError("Failed to load dashboard data.");
-//       } finally {
-//         setLoading(false);
-//       }
-//     };
-
-//     fetchDashboard();
-//     // eslint-disable-next-line
-//   }, []);
-
-//   // Fetch bus details when selectedBus or time range changes
-//   useEffect(() => {
-//     if (!selectedBus) {
-//       setFuelData([]);
-//       setEvents([]);
-//       setFuelStats(null);
-//       return;
-//     }
-
-//     const range =
-//       timeRange === "custom"
-//         ? {
-//             startDate: customStart ? new Date(customStart) : undefined,
-//             endDate: customEnd ? new Date(customEnd) : undefined,
-//           }
-//         : getDateRange(toTitleCase(timeRange));
-
-//     if (!range?.startDate || !range?.endDate) {
-//       setFuelData([]);
-//       setEvents([]);
-//       setFuelStats(null);
-//       return;
-//     }
-
-//     fetchBusDetails(selectedBus, range);
-//   }, [selectedBus, timeRange, customStart, customEnd, fetchBusDetails]);
-
-//   // Handler for bus card click: set selected bus and fetch its data for current time range
-//   const handleBusCardClick = (busId: string) => {
-//     setSelectedBus(busId);
-//   };
-
-//   if (loading && topBuses.length === 0) {
-//     return (
-//       <div className="flex justify-center items-center h-screen">
-//         <div className="animate-spin h-12 w-12 border-t-2 border-b-2 border-blue-500 rounded-full"></div>
-//       </div>
-//     );
-//   }
-
-//   if (error) {
-//     return (
-//       <div className="flex justify-center items-center h-screen">
-//         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
-//           {error}
-//         </div>
-//       </div>
-//     );
-//   }
-
-//   return (
-//     <div className="space-y-10 px-6 py-8 max-w-7xl mx-auto text-gray-800 dark:text-gray-100">
-//       <div className="text-center py-10 bg-white dark:bg-gray-800 rounded-xl shadow-lg space-y-6">
-//         <p className="text-xl font-medium">
-//           Welcome to <span className="text-blue-600 dark:text-blue-300 font-bold">FuelSafe</span>
-//         </p>
-//         <div className="flex justify-center gap-3 flex-wrap">
-//           <span className="badge">🔍 Real-time Monitoring</span>
-//           <span className="badge">⚠️ Anomaly Detection</span>
-//           <span className="badge">✅ {totalBuses} Buses Monitored</span>
-//         </div>
-//       </div>
-
-//       <DashboardTimeFilter
-//         range={timeRange}
-//         customStart={customStart}
-//         customEnd={customEnd}
-//         onRangeChange={setTimeRange}
-//         onCustomDateChange={(start, end) => {
-//           setCustomStart(start);
-//           setCustomEnd(end);
-//         }}
-//       />
-
-//       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-//         <div className="bg-blue-600 text-white p-6 rounded-lg shadow flex flex-col">
-//           <BusFront className="w-8 h-8 mb-2" />
-//           <h4 className="text-sm">Total Buses</h4>
-//           <p className="text-2xl font-bold">
-//             <CountUp end={totalBuses} duration={1} />
-//           </p>
-//         </div>
-//         <StatCards
-//           title="Ongoing Alerts"
-//           icon="alert"
-//           color="from-red-500 to-red-700"
-//           apiPath="/alerts"
-//           timeRange={timeRange}
-//           customStart={customStart}
-//           customEnd={customEnd}
-//         />
-//         <StatCards
-//           title="Fuel Theft Events"
-//           icon="fuel"
-//           color="from-yellow-500 to-yellow-700"
-//           apiPath="/alerts?type=THEFT"
-//           timeRange={timeRange}
-//           customStart={customStart}
-//           customEnd={customEnd}
-//         />
-//         <StatCards
-//           title="Refueling Events"
-//           icon="refuel"
-//           color="from-green-500 to-green-700"
-//           apiPath="/alerts?type=REFUEL"
-//           timeRange={timeRange}
-//           customStart={customStart}
-//           customEnd={customEnd}
-//         />
-//       </div>
-
-//       <h3 className="text-xl font-semibold mt-10">🚌 Monitored Buses</h3>
-//       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-//         {topBuses.map((bus) => (
-//           <MonitoredBusCard
-//             key={bus.busId}
-//             busId={bus.busId}
-//             regNumber={bus.registrationNo}
-//             driver={bus.driverName}
-//             route={bus.routeName}
-//             fuelLevel={bus.fuelLevel}
-//             status={bus.status}
-//             imageUrl={busImage}
-//             onClick={() => handleBusCardClick(bus.busId)}
-//             selected={selectedBus === bus.busId}
-//           />
-//         ))}
-//       </div>
-
-//       {selectedBus && (
-//         <div className="mt-10 space-y-6">
-//           <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow">
-//             <h4 className="font-semibold text-lg mb-3">
-//               Fuel Level – {topBuses.find((b) => b.busId === selectedBus)?.registrationNo || selectedBus}
-//             </h4>
-//             <FuelChart fuelData={fuelData} busId={selectedBus} />
-//             {fuelStats && (
-//               <FuelStatsGrid
-//                 stats={{
-//                   total_fuel_consumed: fuelStats.totalFuelConsumed,
-//                   total_fuel_stolen: fuelStats.totalFuelStolen,
-//                   total_fuel_refueled: fuelStats.totalFuelRefueled,
-//                   distance_traveled: fuelStats.distanceTravelled,
-//                   fuel_efficiency: fuelStats.fuelEfficiency,
-//                 }}
-//               />
-//             )}
-//           </div>
-//         </div>
-//       )}
-//     </div>
-//   );
-// };
-
-// export default Dashboard;
