@@ -422,10 +422,11 @@ const Dashboard: React.FC = () => {
       </div>
 
       <h3 className="text-xl font-semibold mt-10">🚌 Monitored Buses</h3>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="flex flex-wrap gap-6 justify-center">
         {topBuses.map((bus) => (
           <MonitoredBusCard
             key={bus.busId}
+             className="w-full sm:w-[calc(50%-12px)] lg:w-[calc(33.333%-16px)] max-w-md" 
             busId={bus.busId}
             regNumber={bus.registrationNo}
             driver={bus.driverName}

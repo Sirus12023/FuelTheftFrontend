@@ -13,7 +13,8 @@ interface MonitoredBusCardProps {
   status: "normal" | "alert" | "offline";
   onClick?: () => void;
   selected?: boolean;
-  hasTheft?: boolean;                // highlight if theft in current range
+  hasTheft?: boolean;  
+  className?: string;               // highlight if theft in current range
 }
 
 const MonitoredBusCard: React.FC<MonitoredBusCardProps> = ({
@@ -27,6 +28,7 @@ const MonitoredBusCard: React.FC<MonitoredBusCardProps> = ({
   onClick,
   selected = false,
   hasTheft = false,
+  className = "",
 }) => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -103,6 +105,7 @@ const MonitoredBusCard: React.FC<MonitoredBusCardProps> = ({
         !hasTheft ? "hover:border-blue-500 dark:hover:border-blue-400" : "",
         // nice focus ring for keyboard users
         "focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500 dark:focus-visible:ring-blue-400",
+         className,
       ].join(" ")}
     >
      
