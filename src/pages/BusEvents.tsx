@@ -59,10 +59,11 @@ const BusEvents: React.FC = () => {
   useEffect(() => {
     (async () => {
       try {
-        const res = await axios.get<Vehicle[]>(`${API_BASE_URL}/vehicles`);
-        setVehicles(res.data);
+        const res = await axios.get<any>(`${API_BASE_URL}/vehicles`);
+        const vehiclesData = res.data?.data || res.data;
+        setVehicles(vehiclesData);
         const map: Record<string, string> = {};
-        res.data.forEach(v => { map[v.registrationNo] = v.id; });
+        vehiclesData.forEach((v: any) => { map[v.registrationNo] = v.id; });
         setRegToId(map);
       } catch (e) {
         console.error("Failed to load vehicles", e);
@@ -118,7 +119,7 @@ const BusEvents: React.FC = () => {
 
         const { fromDate, toDate } = computeRange();
 
-        const res = await axios.get<any[]>(`${API_BASE_URL}/history`, {
+        const res = await axios.get<any>(`${API_BASE_URL}/history`, {
           params: {
             vehicleId,               // align with backend
             type: typeFilter || undefined,
@@ -128,8 +129,9 @@ const BusEvents: React.FC = () => {
         });
 
         const v = vehicles.find(v => v.id === vehicleId);
+        const historyData = res.data?.data || res.data || [];
 
-        const formatted: AlertRow[] = (res.data || []).map((a: any) => {
+        const formatted: AlertRow[] = historyData.map((a: any) => {
           // location shape normalization
           const loc = a.location || a.gps || null;
           const latitude =

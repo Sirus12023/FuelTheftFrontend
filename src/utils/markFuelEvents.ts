@@ -1,5 +1,7 @@
-// src/utils/markFuelEvents.ts
-import type { EventType, FuelReading } from "../types/fuel";
+import type { FuelReading } from "../types/fuel";
+
+// Define EventType here since it's not exported from types/fuel
+export type EventType = "NORMAL" | "REFUEL" | "THEFT" | "DROP";
 
 const normalizeEvent = (t?: string | null): EventType => {
   const upper = String(t ?? "NORMAL").toUpperCase();
@@ -8,26 +10,17 @@ const normalizeEvent = (t?: string | null): EventType => {
     : "NORMAL") as EventType;
 };
 
-// Optional thresholds used only if you explicitly enable { infer: true }
-const EPS = 0.2;      // ignore tiny jitter (L)
-const REFUEL_MIN = 10; // L
-const THEFT_MIN  = 10; // L
+const EPS = 0.2;
+const REFUEL_MIN = 10;
+const THEFT_MIN  = 10;
 
 type OutRow = FuelReading & { eventType: EventType; fuelChange?: number };
 
-/**
- * Normalizes backend readings.
- * - Always sorts by timestamp and ensures `id`.
- * - Always normalizes eventType to one of: REFUEL | THEFT | DROP | NORMAL.
- * - By default, **does not infer** anything; it trusts backend labels.
- * - If `opts.infer === true`, it will infer from `fuelChange` first, then
- *   from delta with previous reading (using REFUEL_MIN/THEFT_MIN).
- */
 export function markFuelEvents(
   rows: FuelReading[],
-  opts: { infer?: boolean } = {}
+  opts: { infer?: boolean; treatDropAsTheft?: boolean } = {}
 ): OutRow[] {
-  const { infer = false } = opts;
+  const { infer = false, treatDropAsTheft = true } = opts; // <-- default ON
 
   if (!Array.isArray(rows) || rows.length === 0) return [];
 
@@ -40,23 +33,12 @@ export function markFuelEvents(
     );
 
   return sorted.map((row, i, arr) => {
-    // stable id
-    const id =
-      row.id ??
-      `${new Date(row.timestamp as any).getTime() || i}-${i}`;
+    const id = row.id ?? `${new Date(row.timestamp as any).getTime() || i}-${i}`;
 
-    // normalize existing labels
     let event = normalizeEvent((row.eventType as string) ?? (row.type as string));
+    const fuelChange = typeof row.fuelChange === "number" ? row.fuelChange : undefined;
 
-    // normalize fuelChange (null -> undefined)
-    const fuelChange =
-      typeof row.fuelChange === "number" ? row.fuelChange : undefined;
-
-    // ─────────────────────────────────────────────────────────────
-    // Inference is OFF by default (Option A). Only run if infer=true.
-    // ─────────────────────────────────────────────────────────────
     if (infer && event === "NORMAL") {
-      // prefer backend-provided fuelChange sign
       if (typeof fuelChange === "number" && Math.abs(fuelChange) > EPS) {
         event = fuelChange > 0 ? "REFUEL" : "THEFT";
       } else if (i > 0 && typeof row.fuelLevel === "number") {
@@ -68,6 +50,11 @@ export function markFuelEvents(
           else if (delta <= -THEFT_MIN) event = "THEFT";
         }
       }
+    }
+
+    // 🔴 Map DROP → THEFT if desired
+    if (treatDropAsTheft && event === "DROP") {
+      event = "THEFT";
     }
 
     return {

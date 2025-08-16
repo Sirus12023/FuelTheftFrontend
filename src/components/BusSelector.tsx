@@ -29,8 +29,8 @@ const BusSelector: React.FC<Props> = ({
     const fetchBuses = async () => {
       try {
         // Use API_BASE_URL and correct endpoint
-        const res = await axios.get<Bus[]>(`${API_BASE_URL}/vehicles`);
-        const buses = res.data || [];
+        const res = await axios.get<any>(`${API_BASE_URL}/vehicles`);
+        const buses = res.data?.data || res.data || [];
         setBusList(buses);
       } catch (err) {
         console.error("Error fetching buses:", err);

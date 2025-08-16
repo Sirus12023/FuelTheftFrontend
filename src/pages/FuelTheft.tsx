@@ -38,6 +38,7 @@ interface VehicleDetailResponse {
   alerts?: Alert[];
   readings?: FuelReading[];
   sensor?: {
+    Alert?: Alert[];
     alerts?: Alert[];
     readings?: FuelReading[];
     isActive?: boolean;
@@ -92,8 +93,8 @@ const FuelTheft: React.FC = () => {
   useEffect(() => {
     (async () => {
       try {
-        const res = await axios.get<Vehicle[]>(`${API_BASE_URL}/vehicles`);
-        setVehicles(res.data || []);
+        const res = await axios.get<any>(`${API_BASE_URL}/vehicles`);
+        setVehicles(res.data?.data || res.data || []);
       } catch (e) {
         console.error("Failed to load vehicles", e);
       }
@@ -165,27 +166,207 @@ const FuelTheft: React.FC = () => {
         );
 
         const data = res.data;
-        const alerts = data.sensor?.alerts ?? data.alerts ?? [];
+        let alerts = data.sensor?.Alert ?? data.sensor?.alerts ?? data.alerts ?? [];
         const rawReadings = (data.sensor?.readings ?? data.readings ?? []) as FuelReading[];
 
-        // tolerant event matching (±60s) and normalized shape
-        const readingsWithEvents: FuelReading[] = rawReadings.map((r) => {
-          const rTs = new Date(r.timestamp as any).getTime();
-          const match = alerts.find((a: any) => {
-            const aTs = new Date(a.timestamp).getTime();
-            return Math.abs(aTs - rTs) <= 60_000; // within 60 seconds
-          });
+        console.log("FuelTheft - Raw readings:", rawReadings.length);
+        console.log("FuelTheft - Raw alerts:", alerts.length);
 
-          return {
-            ...r,
-            eventType: (match?.type || r.eventType || r.type || "NORMAL").toString().toUpperCase(),
-            description: (r as any).description ?? match?.description ?? null,
-            fuelChange:
-              typeof (r as any).fuelChange === "number" ? (r as any).fuelChange : undefined,
-          };
+        // If no alerts found in vehicle details, try fetching from /history endpoint
+        if (alerts.length === 0) {
+          try {
+            console.log("FuelTheft - No alerts in vehicle details, fetching from /history endpoint...");
+            const historyRes = await axios.get<any>(`${API_BASE_URL}/history`, {
+              params: {
+                vehicleId: selectedVehicleId,
+                fromDate,
+                toDate,
+              },
+            });
+            alerts = historyRes.data?.data || historyRes.data || [];
+            console.log("FuelTheft - Alerts from /history:", alerts.length);
+          } catch (historyErr) {
+            console.error("FuelTheft - Failed to fetch alerts from /history:", historyErr);
+          }
+        }
+
+        // Sort readings by timestamp
+        const readingsSorted = [...rawReadings].sort(
+          (a, b) => new Date(a.timestamp as any).getTime() - new Date(b.timestamp as any).getTime()
+        );
+
+        // Create a map of alerts by timestamp for quick lookup
+        const alertsByTime = new Map<number, Alert[]>();
+        alerts.forEach((alert: Alert) => {
+          const alertTime = new Date(alert.timestamp).getTime();
+          if (!alertsByTime.has(alertTime)) {
+            alertsByTime.set(alertTime, []);
+          }
+          alertsByTime.get(alertTime)!.push(alert);
         });
 
-        const readings = markFuelEvents(readingsWithEvents) as FuelReading[];
+        // Process readings and attach events (same logic as Dashboard)
+        const enrichedReadings: FuelReading[] = readingsSorted.map((reading, index) => {
+          const readingTime = new Date(reading.timestamp as any).getTime();
+          
+          // Extract event information from the reading's raw data
+          const rawData = (reading as any).raw?.sim;
+          let eventType = "NORMAL";
+          let description = "";
+          let fuelChange: number | undefined;
+
+          if (rawData) {
+            // Get event type from raw data
+            const rawEventType = String(rawData.eventType || "").toUpperCase();
+            if (rawEventType === "THEFT" || rawEventType === "DROP") {
+              eventType = "THEFT";
+            } else if (rawEventType === "REFUEL" || rawEventType === "REFILL") {
+              eventType = "REFUEL";
+            } else {
+              eventType = rawEventType;
+            }
+            
+            // Get fuel change from raw data
+            if (typeof rawData.fuel_diff === "number") {
+              fuelChange = rawData.fuel_diff;
+            }
+            
+            description = `${eventType} event detected`;
+          }
+
+          // Also check for alerts that are close to this reading (within 5 minutes)
+          const MATCH_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
+          let matchedAlerts: Alert[] = [];
+          
+          // Check exact time match first
+          if (alertsByTime.has(readingTime)) {
+            matchedAlerts = alertsByTime.get(readingTime)!;
+          } else {
+            // Check for nearby alerts
+            for (const [alertTime, alertList] of alertsByTime.entries()) {
+              if (Math.abs(alertTime - readingTime) <= MATCH_WINDOW_MS) {
+                matchedAlerts.push(...alertList);
+              }
+            }
+          }
+
+          // If we found alerts, use their information to override
+          if (matchedAlerts.length > 0) {
+            // Prioritize fuel-related events over system events
+            const fuelEventPriority = ["REFUEL", "REFILL", "THEFT", "DROP"];
+            let primaryAlert = matchedAlerts[0];
+            
+            // Find the highest priority fuel event if multiple alerts exist
+            for (const alert of matchedAlerts) {
+              const alertType = String(alert.type || "").toUpperCase();
+              if (fuelEventPriority.includes(alertType)) {
+                primaryAlert = alert;
+                break;
+              }
+            }
+            
+            const alertType = String(primaryAlert.type || "").toUpperCase();
+            
+            // Map alert types to event types
+            if (alertType === "THEFT" || alertType === "DROP") {
+              eventType = "THEFT";
+            } else if (alertType === "REFUEL" || alertType === "REFILL") {
+              eventType = "REFUEL";
+            } else {
+              eventType = alertType;
+            }
+            
+            description = primaryAlert.description || `${eventType} detected`;
+            
+            // Try to extract fuel change from alert
+            if (typeof (primaryAlert as any).fuelChange === "number") {
+              fuelChange = (primaryAlert as any).fuelChange;
+            }
+          }
+
+          return {
+            ...reading,
+            id: reading.id ?? `${readingTime}-${index}`,
+            eventType,
+            description: description || undefined,
+            fuelChange,
+          } as FuelReading;
+        });
+
+        // Add virtual points for alerts that don't have nearby readings
+        const virtualPoints: FuelReading[] = [];
+        const processedAlertTimes = new Set<number>();
+        
+        alerts.forEach((alert: Alert) => {
+          const alertTime = new Date(alert.timestamp).getTime();
+          
+          // Check if this alert was already processed with a reading
+          let wasProcessed = false;
+          for (const reading of enrichedReadings) {
+            const readingTime = new Date(reading.timestamp as any).getTime();
+            if (Math.abs(alertTime - readingTime) <= 5 * 60 * 1000) { // 5 minutes
+              wasProcessed = true;
+              break;
+            }
+          }
+          
+          if (!wasProcessed && !processedAlertTimes.has(alertTime)) {
+            processedAlertTimes.add(alertTime);
+            
+            // Find the closest reading to get fuel level
+            let closestReading: FuelReading | null = null;
+            let minDiff = Infinity;
+            
+            for (const reading of readingsSorted) {
+              const readingTime = new Date(reading.timestamp as any).getTime();
+              const diff = Math.abs(alertTime - readingTime);
+              if (diff < minDiff) {
+                minDiff = diff;
+                closestReading = reading;
+              }
+            }
+            
+            const alertType = String(alert.type || "").toUpperCase();
+            
+            // Skip system events for virtual points - they don't need visual representation
+            if (["SENSOR_HEALTH", "LOW_FUEL"].includes(alertType)) {
+              return; // Use return instead of continue in forEach
+            }
+            
+            let eventType = "NORMAL";
+            if (alertType === "THEFT" || alertType === "DROP") {
+              eventType = "THEFT";
+            } else if (alertType === "REFUEL" || alertType === "REFILL") {
+              eventType = "REFUEL";
+            } else {
+              eventType = alertType;
+            }
+            
+            virtualPoints.push({
+              id: `virt-${alert.id || alertTime}`,
+              timestamp: new Date(alertTime).toISOString(),
+              fuelLevel: closestReading ? Number(closestReading.fuelLevel) : 0,
+              eventType,
+              description: alert.description || `${eventType} detected`,
+              fuelChange: typeof (alert as any).fuelChange === "number" ? (alert as any).fuelChange : undefined,
+            } as FuelReading);
+          }
+        });
+
+        // Merge and sort all data points
+        const allDataPoints = [...enrichedReadings, ...virtualPoints].sort(
+          (a, b) => new Date(a.timestamp as any).getTime() - new Date(b.timestamp as any).getTime()
+        );
+
+        // Apply final processing with markFuelEvents
+        const readings = markFuelEvents(allDataPoints, { infer: false, treatDropAsTheft: true });
+        
+        console.log("FuelTheft - Finalized fuel data:", readings.length);
+        console.log("FuelTheft - Event breakdown:", readings.reduce((acc, reading) => {
+          const eventType = (reading as any).eventType || "NORMAL";
+          acc[eventType] = (acc[eventType] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>));
 
         setFuelData(readings);
         setNoData(readings.length === 0);
@@ -220,7 +401,74 @@ const FuelTheft: React.FC = () => {
           },
         });
 
-        setFuelStats(usage.data);
+        // Use backend stats as primary source, with alert-based calculation as fallback
+        let finalStats = { ...usage.data, fuelEfficiency: usage.data.fuelEfficiency ?? 0 };
+        
+        // Verify backend stats are reasonable, use alert-based calculation as fallback if needed
+        const backendRefueled = usage.data.totalFuelRefueled || 0;
+        const backendStolen = usage.data.totalFuelStolen || 0;
+        
+        // Calculate from alerts as verification/fallback
+        let alertBasedRefueled = 0;
+        let alertBasedStolen = 0;
+        
+        if (alerts.length > 0) {
+          // Calculate refuel amount from alerts
+          const refuelAlerts = alerts.filter((alert: Alert) => 
+            alert.type === "REFUEL" || alert.type === "REFILL"
+          );
+          
+          if (refuelAlerts.length > 0) {
+            refuelAlerts.forEach((alert: Alert) => {
+              // Extract fuel amount from description like "Δ=+107.83L"
+              const match = alert.description?.match(/Δ=\+([\d.]+)L/);
+              if (match) {
+                alertBasedRefueled += parseFloat(match[1]);
+              }
+            });
+            console.log("FuelTheft - Alert-based refuel calculation:", alertBasedRefueled);
+          }
+          
+          // Calculate theft amount from alerts
+          const theftAlerts = alerts.filter((alert: Alert) => 
+            alert.type === "THEFT" || alert.type === "DROP"
+          );
+          
+          if (theftAlerts.length > 0) {
+            theftAlerts.forEach((alert: Alert) => {
+              // Extract fuel amount from description like "Δ=-5.05L"
+              const match = alert.description?.match(/Δ=-([\d.]+)L/);
+              if (match) {
+                alertBasedStolen += parseFloat(match[1]);
+              }
+            });
+            console.log("FuelTheft - Alert-based theft calculation:", alertBasedStolen);
+            console.log("FuelTheft - Theft alerts processed:", theftAlerts.length);
+          }
+        }
+        
+        // Use backend stats if they're reasonable, otherwise fall back to alert-based calculation
+        if (backendRefueled > 0 && Math.abs(backendRefueled - alertBasedRefueled) < 5) {
+          // Backend refuel amount is reasonable (within 5L tolerance)
+          finalStats.totalFuelRefueled = backendRefueled;
+          console.log("FuelTheft - Using backend refuel amount:", backendRefueled);
+        } else if (alertBasedRefueled > 0) {
+          // Fall back to alert-based calculation
+          finalStats.totalFuelRefueled = alertBasedRefueled;
+          console.log("FuelTheft - Using alert-based refuel amount (fallback):", alertBasedRefueled);
+        }
+        
+        if (backendStolen > 0 && Math.abs(backendStolen - alertBasedStolen) < 5) {
+          // Backend theft amount is reasonable (within 5L tolerance)
+          finalStats.totalFuelStolen = backendStolen;
+          console.log("FuelTheft - Using backend theft amount:", backendStolen);
+        } else if (alertBasedStolen > 0) {
+          // Fall back to alert-based calculation
+          finalStats.totalFuelStolen = alertBasedStolen;
+          console.log("FuelTheft - Using alert-based theft amount (fallback):", alertBasedStolen);
+        }
+        
+        setFuelStats(finalStats);
       } catch (error) {
         console.error("Error fetching fuel data:", error);
         setFuelData([]);
