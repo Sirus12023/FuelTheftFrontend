@@ -12,8 +12,6 @@ import MonitoredBusCard from "../components/MonitoredBusCard";
 import { getDateRange } from "../utils/dateRangeFromTimeOption";
 import FuelChart from "../components/FuelChart";
 import StatCards from "../components/StatCards";
-import FuelStatsGrid from "../components/FuelStatsGrid";
-import { BusFront } from "lucide-react";
 import CountUp from "react-countup";
 import busImage from "../assets/bus1.jpg";
 import DashboardTimeFilter from "../components/DashboardTimeFilter";
@@ -644,13 +642,16 @@ const Dashboard: React.FC = () => {
       />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-blue-600 text-white p-6 rounded-lg shadow flex flex-col">
-          <BusFront className="w-8 h-8 mb-2" />
-          <h4 className="text-sm">Total Buses</h4>
-          <p className="text-2xl font-bold">
-            <CountUp end={totalBuses} duration={1} />
-          </p>
-        </div>
+        <StatCards
+          title="Total Buses"
+          icon="bus"
+          color="from-blue-500 to-blue-700"
+          apiPath="" // No API call needed, just show totalBuses
+          timeRange={timeRange}
+          customStart={customStart}
+          customEnd={customEnd}
+          countOverride={totalBuses}
+        />
 
         <StatCards
           title="Ongoing Alerts"
@@ -714,17 +715,6 @@ const Dashboard: React.FC = () => {
               busId={selectedBus}
               theftTotalOverride={fuelStats?.totalFuelStolen}
             />
-            {fuelStats && (
-              <FuelStatsGrid
-                stats={{
-                  total_fuel_consumed: fuelStats.totalFuelConsumed,
-                  total_fuel_stolen: fuelStats.totalFuelStolen,
-                  total_fuel_refueled: fuelStats.totalFuelRefueled,
-                  distance_traveled: fuelStats.distanceTravelled,
-                  fuel_efficiency: fuelStats.fuelEfficiency,
-                }}
-              />
-            )}
           </div>
         </div>
       )}

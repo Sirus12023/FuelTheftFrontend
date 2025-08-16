@@ -108,6 +108,18 @@ const FuelTheft: React.FC = () => {
     setSearch(initialRegNo);
     const id = regToId[initialRegNo];
     setSelectedVehicleId(id || null);
+    
+    // Set basic bus details immediately
+    const vehicle = vehicles.find(v => v.registrationNo === initialRegNo);
+    if (vehicle) {
+      setBusDetails({
+        registrationNo: vehicle.registrationNo,
+        driver: vehicle.driver?.name || "Unassigned",
+        route: vehicle.route?.name || "Unknown",
+        currentFuelLevel: 0, // Will be updated when data is fetched
+        status: "normal", // Will be updated when data is fetched
+      });
+    }
   }, [initialRegNo, vehicles, regToId]);
 
   // Suggestions (sorted & de-duped)
@@ -385,13 +397,12 @@ const FuelTheft: React.FC = () => {
         }
 
         const v = vehicles.find((x) => x.id === selectedVehicleId);
-        setBusDetails({
-          registrationNo: data.registrationNo ?? v?.registrationNo ?? "Unknown",
-          driver: data.driver?.name ?? v?.driver?.name ?? "Unassigned",
-          route: data.route?.name ?? v?.route?.name ?? "Unknown",
+        // Update bus details with current fuel level and status
+        setBusDetails(prev => ({
+          ...prev!,
           currentFuelLevel: (rawReadings.at(-1)?.fuelLevel as number) ?? 0,
           status: sensorStatus ? "normal" : "offline",
-        });
+        }));
 
         const usage = await axios.get<FuelUsageStats>(`${API_BASE_URL}/fuelusage`, {
           params: {
@@ -488,7 +499,7 @@ const FuelTheft: React.FC = () => {
           🚨 Fuel Theft Monitoring
         </h2>
         <p className="text-lg text-gray-600 dark:text-gray-300">
-          Monitor your fleet’s fuel activity with real-time detection & analysis
+          Monitor your fleet's fuel activity with real-time detection & analysis
         </p>
       </div>
 
@@ -502,11 +513,25 @@ const FuelTheft: React.FC = () => {
               setSelectedReg(val);
               setSearch(val);
               setSelectedVehicleId(regToId[val]);
+              
+              // Set basic bus details immediately
+              const vehicle = vehicles.find(v => v.registrationNo === val);
+              if (vehicle) {
+                setBusDetails({
+                  registrationNo: vehicle.registrationNo,
+                  driver: vehicle.driver?.name || "Unassigned",
+                  route: vehicle.route?.name || "Unknown",
+                  currentFuelLevel: 0, // Will be updated when data is fetched
+                  status: "normal", // Will be updated when data is fetched
+                });
+              }
+              
               navigate(`?bus=${encodeURIComponent(val)}`, { replace: false });
             } else {
               setSelectedReg(null);
               setSearch("");
               setSelectedVehicleId(null);
+              setBusDetails(null);
               navigate(`?`, { replace: false });
             }
           }}
@@ -524,20 +549,13 @@ const FuelTheft: React.FC = () => {
         <div className="text-center py-24 px-4 border rounded-xl bg-gradient-to-br from-white to-blue-50 dark:from-gray-800 dark:to-gray-700 dark:border-gray-600 text-gray-600 dark:text-gray-300 animate-fade-in">
           <h3 className="text-2xl font-semibold mb-2">No Bus Selected</h3>
           <p>
-            Please select a <span className="font-semibold text-blue-600 dark:text-blue-400">bus</span> and
-            <span className="font-semibold text-blue-600 dark:text-blue-400"> time range</span> to view analytics.
+            Please select a <span className="font-semibold text-blue-600 dark:text-blue-400">bus</span> to view analytics.
           </p>
         </div>
       )}
 
-      {selectedVehicleId && noData && (
-        <div className="text-center py-24 px-4 border rounded-xl bg-gradient-to-br from-white to-blue-50 dark:from-gray-800 dark:to-gray-700 dark:border-gray-600 text-gray-600 dark:text-gray-300 animate-fade-in">
-          <h3 className="text-2xl font-semibold mb-2">No Data Available</h3>
-          <p>No fuel data found for the selected bus and time range.</p>
-        </div>
-      )}
-
-      {selectedVehicleId && busDetails && !noData && (
+      {/* Show bus card immediately when bus is selected */}
+      {selectedVehicleId && busDetails && (
         <MonitoredBusCard
           busId={selectedVehicleId}
           regNumber={busDetails.registrationNo}
@@ -549,20 +567,35 @@ const FuelTheft: React.FC = () => {
         />
       )}
 
-      {selectedVehicleId && !noData && (
+      {/* Chart and data area - show different states based on data availability */}
+      {selectedVehicleId && (
         <>
-          <FuelChart fuelData={fuelData} busId={selectedVehicleId}
-          theftTotalOverride={fuelStats?.totalFuelStolen}  />
-          {fuelStats && (
-            <FuelStatsGrid
-              stats={{
-                total_fuel_consumed: fuelStats.totalFuelConsumed,
-                total_fuel_stolen: fuelStats.totalFuelStolen,
-                total_fuel_refueled: fuelStats.totalFuelRefueled,
-                distance_traveled: fuelStats.distanceTravelled,
-                fuel_efficiency: fuelStats.fuelEfficiency,
-              }}
-            />
+          {fuelData.length > 0 && !noData ? (
+            <>
+              <FuelChart fuelData={fuelData} busId={selectedVehicleId}
+              theftTotalOverride={fuelStats?.totalFuelStolen}  />
+              {fuelStats && (
+                <FuelStatsGrid
+                  stats={{
+                    total_fuel_consumed: fuelStats.totalFuelConsumed,
+                    total_fuel_stolen: fuelStats.totalFuelStolen,
+                    total_fuel_refueled: fuelStats.totalFuelRefueled,
+                    distance_traveled: fuelStats.distanceTravelled,
+                    fuel_efficiency: fuelStats.fuelEfficiency,
+                  }}
+                />
+              )}
+            </>
+          ) : noData ? (
+            <div className="text-center py-16 px-4 border rounded-xl bg-gradient-to-br from-white to-blue-50 dark:from-gray-800 dark:to-gray-700 dark:border-gray-600 text-gray-600 dark:text-gray-300">
+              <h3 className="text-xl font-semibold mb-2">No Data Available</h3>
+              <p>No fuel data found for the selected bus and time range.</p>
+            </div>
+          ) : (
+            <div className="text-center py-16 px-4 border rounded-xl bg-gradient-to-br from-white to-blue-50 dark:from-gray-800 dark:to-gray-700 dark:border-gray-600 text-gray-600 dark:text-gray-300">
+              <h3 className="text-xl font-semibold mb-2">Select Time Range</h3>
+              <p>Please select a time range to view fuel analytics and statistics.</p>
+            </div>
           )}
         </>
       )}

@@ -3,21 +3,22 @@ import React, { useEffect, useState } from "react";
 import { getDateRange } from "../utils/dateRangeFromTimeOption";
 import axios from "axios";
 import { API_BASE_URL } from "../config";
-import { AlertCircle, Fuel, RefreshCcw } from "lucide-react";
+import { AlertCircle, Fuel, RefreshCcw, Bus } from "lucide-react";
 import CountUp from "react-countup";
 
 interface Props {
   title: string;
-  icon: "alert" | "fuel" | "refuel";
+  icon: "alert" | "fuel" | "refuel" | "bus";
   color: string;       // e.g. "from-red-500 to-red-700"
   apiPath: string;     // e.g. "/history?type=THEFT" or "/history?type=THEFT,DROP"
   timeRange: string;   // "today" | "yesterday" | "week" | "month" | "custom"
   customStart: string; // "YYYY-MM-DD"
   customEnd: string;   // "YYYY-MM-DD"
+  countOverride?: number; // Optional override for static values like total buses
 }
 
 const getIcon = (name: string) => {
-  const baseClass = "w-8 h-8 text-white min-w-8";
+  const baseClass = "w-10 h-10 text-white/90";
   switch (name) {
     case "alert":
       return <AlertCircle className={baseClass} />;
@@ -25,6 +26,8 @@ const getIcon = (name: string) => {
       return <Fuel className={baseClass} />;
     case "refuel":
       return <RefreshCcw className={baseClass} />;
+    case "bus":
+      return <Bus className={baseClass} />;
     default:
       return null;
   }
@@ -38,12 +41,25 @@ const StatCards: React.FC<Props> = ({
   timeRange,
   customStart,
   customEnd,
+  countOverride,
 }) => {
-  const [count, setCount] = useState<number | null>(null);
+  const [count, setCount] = useState<number | null>(countOverride || null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Update count when countOverride changes
   useEffect(() => {
+    if (countOverride !== undefined) {
+      setCount(countOverride);
+    }
+  }, [countOverride]);
+
+  useEffect(() => {
+    // Skip API call if countOverride is provided
+    if (countOverride !== undefined) {
+      return;
+    }
+
     let cancelled = false;
 
     const fetchCount = async () => {
@@ -81,7 +97,7 @@ const StatCards: React.FC<Props> = ({
           });
         }
 
-        // 3) Use backend’s expected date param names
+        // 3) Use backend's expected date param names
         if (startDate) params.fromDate = startDate.toISOString();
         if (endDate) params.toDate = endDate.toISOString();
 
@@ -119,7 +135,8 @@ const StatCards: React.FC<Props> = ({
             ? res.data.count
             : undefined;
 
-        setCount(typeof serverCount === "number" ? serverCount : data.length);
+        const newCount = typeof serverCount === "number" ? serverCount : data.length;
+        setCount(newCount);
       } catch (err) {
         if (cancelled) return;
         console.error(`Error fetching ${title} count`, err);
@@ -134,29 +151,57 @@ const StatCards: React.FC<Props> = ({
     return () => {
       cancelled = true;
     };
-  }, [apiPath, title, timeRange, customStart, customEnd]);
+  }, [apiPath, title, timeRange, customStart, customEnd, countOverride]);
 
   return (
     <div
-      className={`bg-gradient-to-r ${color} text-white p-6 rounded-xl shadow-md flex flex-col gap-3 hover:scale-[1.02] transition-transform overflow-hidden`}
+      className={`bg-gradient-to-br ${color} text-white p-6 rounded-2xl shadow-lg hover:shadow-xl 
+                 transition-all duration-300 hover:scale-[1.02] overflow-hidden relative group
+                 border border-white/10 backdrop-blur-sm`}
     >
-      <div className="flex justify-between items-start gap-3 flex-wrap">
-        <div className="flex-shrink-0">{getIcon(icon)}</div>
-        <div className="flex flex-col sm:items-end w-full sm:w-auto max-w-full" />
-      </div>
+      {/* Background pattern */}
+      <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+      
+      {/* Content */}
+      <div className="relative z-10">
+        {/* Header */}
+        <div className="flex justify-between items-start gap-3 mb-4">
+          <div className="flex-shrink-0 p-2 bg-white/10 rounded-xl backdrop-blur-sm">
+            {getIcon(icon)}
+          </div>
+        </div>
 
-      <h3 className="text-sm mt-2">{title}</h3>
-      <p className="text-3xl font-bold min-h-[2.5rem] flex items-center">
-        {loading ? (
-          <span className="animate-spin inline-block w-6 h-6 border-2 border-white border-t-transparent rounded-full" />
-        ) : error ? (
-          <span className="text-red-200 text-base">{error}</span>
-        ) : count !== null ? (
-          <CountUp end={count} duration={0.8} />
-        ) : (
-          <span className="text-gray-200 text-base">No data</span>
-        )}
-      </p>
+        {/* Title */}
+        <h3 className="text-sm font-semibold text-white/90 mb-2 uppercase tracking-wide">
+          {title}
+        </h3>
+
+        {/* Count */}
+        <div className="flex items-baseline gap-2">
+          <p className="text-4xl font-bold min-h-[3rem] flex items-center">
+            {loading ? (
+              <div className="flex items-center gap-2">
+                <span className="animate-spin inline-block w-6 h-6 border-2 border-white/30 border-t-white rounded-full" />
+                <span className="text-lg text-white/70">Loading...</span>
+              </div>
+            ) : error ? (
+              <span className="text-red-200 text-lg font-medium">{error}</span>
+            ) : count !== null ? (
+              <CountUp 
+                end={count} 
+                duration={1.2} 
+                separator=","
+                className="text-white"
+              />
+            ) : (
+              <span className="text-white/60 text-lg">No data</span>
+            )}
+          </p>
+        </div>
+
+        {/* Subtle animation on hover */}
+        <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-white/20 to-white/10 transform scale-x-0 group-hover:scale-x-100 transition-transform duration-500 origin-left"></div>
+      </div>
     </div>
   );
 };
