@@ -7,7 +7,7 @@ import {
   FaMoon,
   FaBars,
 } from "react-icons/fa";
-import { NavLink, useLocation } from "react-router-dom";
+import { NavLink } from "react-router-dom";
 import logoFull3 from "../assets/logoFull3.png";
 import logoIcon4 from "../assets/logoIcon4.png";
 
@@ -24,7 +24,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   darkMode,
   toggleDarkMode,
 }) => {
-  const location = useLocation();
+  // removed unused location
 
   // Persist collapse preference
   useEffect(() => {

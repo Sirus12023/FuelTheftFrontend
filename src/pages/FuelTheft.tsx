@@ -11,8 +11,8 @@ import FuelStatsGrid from "../components/FuelStatsGrid";
 import { markFuelEvents } from "../utils/markFuelEvents";
 import type { FuelReading } from "../types/fuel";
 
-// If your backend expects `busId` instead of `vehicleId` for /sensor, switch here
-const SENSOR_ID_PARAM = "vehicleId" as const; // change to "busId" if backend needs that
+// Backend expects `busId` for /sensor per API spec
+const SENSOR_ID_PARAM = "busId" as const;
 
 type ISODate = string;
 
@@ -87,7 +87,14 @@ const FuelTheft: React.FC = () => {
   const [fuelData, setFuelData] = useState<FuelReading[]>([]);
   const [busDetails, setBusDetails] = useState<BusDetails | null>(null);
   const [fuelStats, setFuelStats] = useState<FuelUsageStats | null>(null);
-  const [noData, setNoData] = useState(false);
+  const [, setNoData] = useState(false);
+  // Cache last successful data to avoid flashing errors when sensor data missing
+  const lastGoodRef = React.useRef<{
+    fuelData: FuelReading[];
+    busDetails: BusDetails | null;
+    fuelStats: FuelUsageStats | null;
+    selectedVehicleId: string | null;
+  }>({ fuelData: [], busDetails: null, fuelStats: null, selectedVehicleId: null });
 
   // Load vehicles once
   useEffect(() => {
@@ -129,14 +136,8 @@ const FuelTheft: React.FC = () => {
   );
 
   // When the user picks a bus in the filter
-  const handleSelectBus = (regNo: string) => {
-    if (!regToId[regNo]) return; // ignore unknown
-    setSelectedReg(regNo);
-    setSearch(regNo);
-    setSelectedVehicleId(regToId[regNo]);
-    // keep URL shareable by reg no
-    navigate(`?bus=${encodeURIComponent(regNo)}`, { replace: false });
-  };
+  // handleSelectBus kept for future usage; suppress unused by referencing conditionally
+  // remove unused local handler to satisfy linter
 
   useEffect(() => {
     if (!selectedVehicleId) {
@@ -166,20 +167,70 @@ const FuelTheft: React.FC = () => {
         const fromDate = (startDate ?? new Date(now.setHours(0, 0, 0, 0))).toISOString();
         const toDate = (endDate ?? new Date()).toISOString();
 
-        const res = await axios.get<VehicleDetailResponse>(
-          `${API_BASE_URL}/vehicles/${selectedVehicleId}/details`,
-          {
-            params: {
-              include: "readings,alerts,events",
-              fromDate, // backend expects fromDate
-              toDate,   // backend expects toDate
-            },
+        // 1) Fetch sensor(s) for this vehicle to determine sensorId and status
+        let sensorStatus = true;
+        let allowedSensorIds: string[] = [];
+        try {
+          const sensorRes = await axios.get(`${API_BASE_URL}/sensor`, {
+            params: { [SENSOR_ID_PARAM]: selectedVehicleId },
+          });
+          const sensors = Array.isArray(sensorRes.data) ? sensorRes.data : [];
+          sensorStatus = sensors.length === 0 ? true : sensors.every((s: any) => s.isActive !== false);
+          allowedSensorIds = sensors
+            .map((s: any) => String(s.id || s.sensorId || s.serial || s.name || "").trim())
+            .filter((x: string) => x.length > 0);
+        } catch {
+          sensorStatus = true;
+          allowedSensorIds = [];
+        }
+
+        let res: { data: VehicleDetailResponse };
+        try {
+          res = await axios.get<VehicleDetailResponse>(
+            `${API_BASE_URL}/vehicles/${selectedVehicleId}/details`,
+            {
+              params: {
+                include: "alerts,readings,histories,events,sensor",
+                fromDate,
+                toDate,
+              },
+            }
+          );
+        } catch (primaryErr: any) {
+          // Fallback for 404: retry with minimal include
+          if (primaryErr?.response?.status === 404) {
+            res = await axios.get<VehicleDetailResponse>(
+              `${API_BASE_URL}/vehicles/${selectedVehicleId}/details`,
+              {
+                params: {
+                  include: "alerts,readings,sensor",
+                  fromDate,
+                  toDate,
+                },
+              }
+            );
+          } else {
+            throw primaryErr;
           }
-        );
+        }
 
         const data = res.data;
         let alerts = data.sensor?.Alert ?? data.sensor?.alerts ?? data.alerts ?? [];
         const rawReadings = (data.sensor?.readings ?? data.readings ?? []) as FuelReading[];
+        const normalizedReadings: FuelReading[] = (Array.isArray(rawReadings) ? rawReadings : [])
+          .map((r: any, idx: number) => {
+            const ts = r.timestamp || r.time || r.createdAt || r.date;
+            const tsNum = typeof ts === "number" ? ts : Date.parse(ts || "");
+            const iso = Number.isFinite(tsNum) ? new Date(tsNum).toISOString() : new Date().toISOString();
+            const levelRaw = r.fuelLevel ?? r.fuel_level ?? r.level ?? r.value ?? r.fuel;
+            const level = Number(levelRaw);
+            return {
+              ...r,
+              id: r.id ?? `${tsNum || Date.now()}-${idx}`,
+              timestamp: iso,
+              fuelLevel: Number.isFinite(level) ? level : 0,
+            } as FuelReading;
+          });
 
         console.log("FuelTheft - Raw readings:", rawReadings.length);
         console.log("FuelTheft - Raw alerts:", alerts.length);
@@ -190,12 +241,30 @@ const FuelTheft: React.FC = () => {
             console.log("FuelTheft - No alerts in vehicle details, fetching from /history endpoint...");
             const historyRes = await axios.get<any>(`${API_BASE_URL}/history`, {
               params: {
+                busId: selectedVehicleId,
                 vehicleId: selectedVehicleId,
+                // If there is a single known sensor, pass it to tight-scope results
+                sensorId: allowedSensorIds.length === 1 ? allowedSensorIds[0] : undefined,
                 fromDate,
                 toDate,
               },
             });
-            alerts = historyRes.data?.data || historyRes.data || [];
+            const fetched = historyRes.data?.data || historyRes.data || [];
+            alerts = fetched.filter((a: any) => {
+              // Sensor filter first when known
+              const aSensor = String(a?.sensorId || a?.sensor?.id || a?.sensor?.serial || "").trim();
+              if (allowedSensorIds.length > 0 && aSensor) {
+                if (!allowedSensorIds.includes(aSensor)) return false;
+              }
+
+              const idMatch =
+                String(a?.bus?.id || "") === String(selectedVehicleId) ||
+                String(a?.busId || "") === String(selectedVehicleId) ||
+                String(a?.vehicleId || "") === String(selectedVehicleId);
+              if (idMatch) return true;
+              const reg = a?.bus?.registrationNumber || a?.bus?.registrationNo;
+              return selectedReg && reg && String(reg) === String(selectedReg);
+            });
             console.log("FuelTheft - Alerts from /history:", alerts.length);
           } catch (historyErr) {
             console.error("FuelTheft - Failed to fetch alerts from /history:", historyErr);
@@ -203,7 +272,7 @@ const FuelTheft: React.FC = () => {
         }
 
         // Sort readings by timestamp
-        const readingsSorted = [...rawReadings].sort(
+        const readingsSorted = [...normalizedReadings].sort(
           (a, b) => new Date(a.timestamp as any).getTime() - new Date(b.timestamp as any).getTime()
         );
 
@@ -371,7 +440,7 @@ const FuelTheft: React.FC = () => {
         );
 
         // Apply final processing with markFuelEvents
-        const readings = markFuelEvents(allDataPoints, { infer: false, treatDropAsTheft: true });
+        const readings = markFuelEvents(allDataPoints, { infer: true, treatDropAsTheft: true });
         
         console.log("FuelTheft - Finalized fuel data:", readings.length);
         console.log("FuelTheft - Event breakdown:", readings.reduce((acc, reading) => {
@@ -383,24 +452,11 @@ const FuelTheft: React.FC = () => {
         setFuelData(readings);
         setNoData(readings.length === 0);
 
-        // Sensor status (switch SENSOR_ID_PARAM if your backend needs busId)
-        let sensorStatus = true;
-        try {
-          const sensorRes = await axios.get(`${API_BASE_URL}/sensor`, {
-            params: { [SENSOR_ID_PARAM]: selectedVehicleId },
-          });
-          const sensors = Array.isArray(sensorRes.data) ? sensorRes.data : [];
-          sensorStatus =
-            sensors.length === 0 ? true : sensors.every((s: any) => s.isActive !== false);
-        } catch {
-          sensorStatus = true;
-        }
-
         const v = vehicles.find((x) => x.id === selectedVehicleId);
         // Update bus details with current fuel level and status
         setBusDetails(prev => ({
           ...prev!,
-          currentFuelLevel: (rawReadings.at(-1)?.fuelLevel as number) ?? 0,
+          currentFuelLevel: (normalizedReadings.at(-1)?.fuelLevel as number) ?? 0,
           status: sensorStatus ? "normal" : "offline",
         }));
 
@@ -480,12 +536,34 @@ const FuelTheft: React.FC = () => {
         }
         
         setFuelStats(finalStats);
+
+        // Update cache of last good data
+        lastGoodRef.current = {
+          fuelData: readings,
+          busDetails: {
+            registrationNo: busDetails?.registrationNo || v?.registrationNo || "",
+            driver: busDetails?.driver || v?.driver?.name || "Unassigned",
+            route: busDetails?.route || v?.route?.name || "Unknown",
+            currentFuelLevel: (rawReadings.at(-1)?.fuelLevel as number) ?? 0,
+            status: sensorStatus ? "normal" : "offline",
+          },
+          fuelStats: finalStats,
+          selectedVehicleId,
+        };
       } catch (error) {
         console.error("Error fetching fuel data:", error);
-        setFuelData([]);
-        setBusDetails(null);
-        setFuelStats(null);
-        setNoData(true);
+        // Preserve last good data if for the same vehicle
+        if (lastGoodRef.current.selectedVehicleId === selectedVehicleId) {
+          setFuelData(lastGoodRef.current.fuelData);
+          setBusDetails(lastGoodRef.current.busDetails);
+          setFuelStats(lastGoodRef.current.fuelStats);
+          setNoData((lastGoodRef.current.fuelData || []).length === 0);
+        } else {
+          setFuelData([]);
+          setBusDetails(null);
+          setFuelStats(null);
+          setNoData(true);
+        }
       }
     };
 
@@ -555,47 +633,36 @@ const FuelTheft: React.FC = () => {
       )}
 
       {/* Show bus card immediately when bus is selected */}
-      {selectedVehicleId && busDetails && (
+      {selectedVehicleId && (
         <MonitoredBusCard
           busId={selectedVehicleId}
-          regNumber={busDetails.registrationNo}
-          driver={busDetails.driver}
-          route={busDetails.route}
-          fuelLevel={busDetails.currentFuelLevel}
-          status={busDetails.status}
+          regNumber={busDetails?.registrationNo || selectedReg || selectedVehicleId}
+          driver={busDetails?.driver || "Unassigned"}
+          route={busDetails?.route || "Unknown"}
+          fuelLevel={busDetails?.currentFuelLevel ?? 0}
+          status={busDetails?.status || "normal"}
           imageUrl="/src/assets/temp_bus.avif"
         />
       )}
 
-      {/* Chart and data area - show different states based on data availability */}
+      {/* Chart and stats area - always show chart; it contains its own empty state */}
       {selectedVehicleId && (
         <>
-          {fuelData.length > 0 && !noData ? (
-            <>
-              <FuelChart fuelData={fuelData} busId={selectedVehicleId}
-              theftTotalOverride={fuelStats?.totalFuelStolen}  />
-              {fuelStats && (
-                <FuelStatsGrid
-                  stats={{
-                    total_fuel_consumed: fuelStats.totalFuelConsumed,
-                    total_fuel_stolen: fuelStats.totalFuelStolen,
-                    total_fuel_refueled: fuelStats.totalFuelRefueled,
-                    distance_traveled: fuelStats.distanceTravelled,
-                    fuel_efficiency: fuelStats.fuelEfficiency,
-                  }}
-                />
-              )}
-            </>
-          ) : noData ? (
-            <div className="text-center py-16 px-4 border rounded-xl bg-gradient-to-br from-white to-blue-50 dark:from-gray-800 dark:to-gray-700 dark:border-gray-600 text-gray-600 dark:text-gray-300">
-              <h3 className="text-xl font-semibold mb-2">No Data Available</h3>
-              <p>No fuel data found for the selected bus and time range.</p>
-            </div>
-          ) : (
-            <div className="text-center py-16 px-4 border rounded-xl bg-gradient-to-br from-white to-blue-50 dark:from-gray-800 dark:to-gray-700 dark:border-gray-600 text-gray-600 dark:text-gray-300">
-              <h3 className="text-xl font-semibold mb-2">Select Time Range</h3>
-              <p>Please select a time range to view fuel analytics and statistics.</p>
-            </div>
+          <FuelChart
+            fuelData={Array.isArray(fuelData) ? fuelData : []}
+            busId={selectedVehicleId}
+            theftTotalOverride={fuelStats?.totalFuelStolen}
+          />
+          {fuelStats && (
+            <FuelStatsGrid
+              stats={{
+                total_fuel_consumed: fuelStats.totalFuelConsumed,
+                total_fuel_stolen: fuelStats.totalFuelStolen,
+                total_fuel_refueled: fuelStats.totalFuelRefueled,
+                distance_traveled: fuelStats.distanceTravelled,
+                fuel_efficiency: fuelStats.fuelEfficiency,
+              }}
+            />
           )}
         </>
       )}

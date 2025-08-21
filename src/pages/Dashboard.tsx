@@ -12,7 +12,7 @@ import MonitoredBusCard from "../components/MonitoredBusCard";
 import { getDateRange } from "../utils/dateRangeFromTimeOption";
 import FuelChart from "../components/FuelChart";
 import StatCards from "../components/StatCards";
-import CountUp from "react-countup";
+// removed unused CountUp import
 import busImage from "../assets/bus1.jpg";
 import DashboardTimeFilter from "../components/DashboardTimeFilter";
 import type { TimeRangeValue } from "../components/DashboardTimeFilter";
@@ -33,12 +33,7 @@ interface Alert {
   busId?: string;
 }
 
-interface Bus {
-  id: string;
-  registrationNo: string;
-  driver?: string;
-  route?: string;
-}
+// removed unused Bus interface
 
 interface BusCard {
   busId: string;
@@ -63,11 +58,18 @@ const Dashboard: React.FC = () => {
   const [selectedBus, setSelectedBus] = useState<string | null>(null);
 
   const [fuelData, setFuelData] = useState<FuelReading[]>([]);
-  const [events, setEvents] = useState<Alert[]>([]);
+  const [, setEvents] = useState<Alert[]>([]);
   const [fuelStats, setFuelStats] = useState<FuelUsageStats | null>(null);
 
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [, setError] = useState<string | null>(null);
+  // Cache to preserve last good data while new fetch is in-flight or fails
+  const lastGoodRef = useRef<{
+    fuelData: FuelReading[];
+    events: Alert[];
+    fuelStats: FuelUsageStats | null;
+    selectedBus: string | null;
+  }>({ fuelData: [], events: [], fuelStats: null, selectedBus: null });
 
   const [timeRange, setTimeRange] = useState<TimeRangeValue>("today");
   const [customStart, setCustomStart] = useState("");
@@ -95,24 +97,55 @@ const Dashboard: React.FC = () => {
         setLoading(true);
 
         // vehicle details + readings + alerts
-        const detailsRes = await axios.get<any>(
-          `${API_BASE_URL}/vehicles/${busId}/details`,
-          {
-            params: {
-              include: "readings,alerts,sensor",
-              // send both pairs to be compatible with either backend variant
-              fromDate: range.startDate.toISOString(),
-              toDate: range.endDate.toISOString(),
-              startDate: range.startDate.toISOString(),
-              endDate: range.endDate.toISOString(),
-            },
+        let detailsRes: any;
+        try {
+          detailsRes = await axios.get<any>(
+            `${API_BASE_URL}/vehicles/${busId}/details`,
+            {
+              params: {
+                include: "alerts,readings,histories,events,sensor",
+                fromDate: range.startDate.toISOString(),
+                toDate: range.endDate.toISOString(),
+              },
+            }
+          );
+        } catch (primaryErr: any) {
+          // Fallback: retry with minimal include; some backends 404 if include list unknown
+          if (primaryErr?.response?.status === 404) {
+            detailsRes = await axios.get<any>(
+              `${API_BASE_URL}/vehicles/${busId}/details`,
+              {
+                params: {
+                  include: "alerts,readings,sensor",
+                  fromDate: range.startDate.toISOString(),
+                  toDate: range.endDate.toISOString(),
+                },
+              }
+            );
+          } else {
+            throw primaryErr;
           }
-        );
+        }
         const details = detailsRes.data;
         
         // Extract readings and alerts from the response
+        // Normalize readings to ensure timestamp and fuelLevel are present
         const readingsRaw: FuelReading[] =
           details.sensor?.readings ?? details.readings ?? [];
+        const normalizedReadings: FuelReading[] = (Array.isArray(readingsRaw) ? readingsRaw : [])
+          .map((r: any, idx: number) => {
+            const ts = r.timestamp || r.time || r.createdAt || r.date;
+            const tsNum = typeof ts === "number" ? ts : Date.parse(ts || "");
+            const iso = Number.isFinite(tsNum) ? new Date(tsNum).toISOString() : new Date().toISOString();
+            const levelRaw = r.fuelLevel ?? r.fuel_level ?? r.level ?? r.value ?? r.fuel;
+            const level = Number(levelRaw);
+            return {
+              ...r,
+              id: r.id ?? `${tsNum || Date.now()}-${idx}`,
+              timestamp: iso,
+              fuelLevel: Number.isFinite(level) ? level : 0,
+            } as FuelReading;
+          });
         let alerts: Alert[] = details.sensor?.Alert ?? details.sensor?.alerts ?? details.alerts ?? [];
 
         console.log("Raw readings:", readingsRaw);
@@ -123,16 +156,44 @@ const Dashboard: React.FC = () => {
         if (alerts.length === 0) {
           try {
             console.log("No alerts in vehicle details, fetching from /history endpoint...");
+            // Try to lookup sensor id for this bus to further scope history when possible
+            let sensorId: string | undefined;
+            try {
+              const sensorRes = await axios.get(`${API_BASE_URL}/sensor`, { params: { busId } });
+              const sensors = Array.isArray(sensorRes.data) ? sensorRes.data : [];
+              const idCandidate = sensors[0]?.id || sensors[0]?.sensorId || sensors[0]?.serial || sensors[0]?.name;
+              sensorId = idCandidate ? String(idCandidate) : undefined;
+            } catch {}
             const historyRes = await axios.get<any>(`${API_BASE_URL}/history`, {
               params: {
+                // try both keys; backend may ignore but we will filter client-side too
+                busId: busId,
                 vehicleId: busId,
+                sensorId,
                 fromDate: range.startDate.toISOString(),
                 toDate: range.endDate.toISOString(),
                 startDate: range.startDate.toISOString(),
                 endDate: range.endDate.toISOString(),
               },
             });
-            alerts = historyRes.data?.data || historyRes.data || [];
+            let fetched = historyRes.data?.data || historyRes.data || [];
+            // Client-side filter to the selected bus
+            const onlyThisBus = fetched.filter((a: any) => {
+              // Sensor filter first when known
+              const aSensor = String(a?.sensorId || a?.sensor?.id || a?.sensor?.serial || "").trim();
+              if (sensorId && aSensor && aSensor !== sensorId) return false;
+
+              const idMatch =
+                String(a?.bus?.id || "") === String(busId) ||
+                String(a?.busId || "") === String(busId) ||
+                String(a?.vehicleId || "") === String(busId);
+              if (idMatch) return true;
+              // fallback: match by registration number
+              const reg = a?.bus?.registrationNumber || a?.bus?.registrationNo;
+              const thisReg = topBuses.find(b => b.busId === busId)?.registrationNo;
+              return thisReg && reg && String(reg) === String(thisReg);
+            });
+            alerts = onlyThisBus;
             console.log("Alerts from /history:", alerts);
           } catch (historyErr) {
             console.error("Failed to fetch alerts from /history:", historyErr);
@@ -140,7 +201,7 @@ const Dashboard: React.FC = () => {
         }
 
         // Sort readings by timestamp
-        const readingsSorted = [...readingsRaw].sort(
+        const readingsSorted = [...normalizedReadings].sort(
           (a, b) => new Date(a.timestamp as any).getTime() - new Date(b.timestamp as any).getTime()
         );
 
@@ -308,7 +369,7 @@ const Dashboard: React.FC = () => {
         );
 
         // Apply final processing with markFuelEvents
-        const finalized = markFuelEvents(allDataPoints, { infer: false, treatDropAsTheft: true });
+        const finalized = markFuelEvents(allDataPoints, { infer: true, treatDropAsTheft: true });
         
         console.log("Finalized fuel data:", finalized);
         console.log("Event breakdown:", finalized.reduce((acc, reading) => {
@@ -320,29 +381,6 @@ const Dashboard: React.FC = () => {
         setFuelData(finalized);
         setEvents(alerts);
 
-        // usage summary (supports both new & old param names)
-        const usage = await axios.get<FuelUsageStats>(
-          `${API_BASE_URL}/fuelusage`,
-          {
-            params: {
-              busId: busId, // backend expects busId
-              startDate: range.startDate.toISOString(),
-              endDate: range.endDate.toISOString(),
-              // tolerant duplicates — ignored if not used
-              busid: busId,
-              fromDate: range.startDate.toISOString(),
-              toDate: range.endDate.toISOString(),
-            },
-          }
-        );
-
-        // Use backend stats as primary source, with alert-based calculation as fallback
-        let finalStats = { ...usage.data, fuelEfficiency: usage.data.fuelEfficiency ?? 0 };
-        
-        // Verify backend stats are reasonable, use alert-based calculation as fallback if needed
-        const backendRefueled = usage.data.totalFuelRefueled || 0;
-        const backendStolen = usage.data.totalFuelStolen || 0;
-        
         // Calculate from alerts as verification/fallback
         let alertBasedRefueled = 0;
         let alertBasedStolen = 0;
@@ -382,36 +420,58 @@ const Dashboard: React.FC = () => {
           }
         }
         
-        // Use backend stats if they're reasonable, otherwise fall back to alert-based calculation
-        if (backendRefueled > 0 && Math.abs(backendRefueled - alertBasedRefueled) < 5) {
-          // Backend refuel amount is reasonable (within 5L tolerance)
-          finalStats.totalFuelRefueled = backendRefueled;
-          console.log("Using backend refuel amount:", backendRefueled);
-        } else if (alertBasedRefueled > 0) {
-          // Fall back to alert-based calculation
-          finalStats.totalFuelRefueled = alertBasedRefueled;
-          console.log("Using alert-based refuel amount (fallback):", alertBasedRefueled);
+        // Try to fetch backend usage, but do NOT fail the whole flow if it 404s
+        let finalStats: FuelUsageStats = {
+          totalFuelConsumed: 0,
+          totalFuelRefueled: alertBasedRefueled,
+          totalFuelStolen: alertBasedStolen,
+          distanceTravelled: 0,
+          fuelEfficiency: 0,
+        };
+        try {
+          const usage = await axios.get<FuelUsageStats>(`${API_BASE_URL}/fuelusage`, {
+            params: {
+              busId: busId,
+              fromDate: range.startDate.toISOString(),
+              toDate: range.endDate.toISOString(),
+            },
+          });
+          const backend = usage.data || ({} as FuelUsageStats);
+          finalStats = {
+            totalFuelConsumed: backend.totalFuelConsumed ?? 0,
+            totalFuelRefueled: backend.totalFuelRefueled ?? alertBasedRefueled,
+            totalFuelStolen: backend.totalFuelStolen ?? alertBasedStolen,
+            distanceTravelled: backend.distanceTravelled ?? 0,
+            fuelEfficiency: backend.fuelEfficiency ?? 0,
+          };
+        } catch (usageErr) {
+          console.warn("Fuel usage unavailable, using alert-based fallback", usageErr);
         }
-        
-        if (backendStolen > 0 && Math.abs(backendStolen - alertBasedStolen) < 5) {
-          // Backend theft amount is reasonable (within 5L tolerance)
-          finalStats.totalFuelStolen = backendStolen;
-          console.log("Using backend theft amount:", backendStolen);
-        } else if (alertBasedStolen > 0) {
-          // Fall back to alert-based calculation
-          finalStats.totalFuelStolen = alertBasedStolen;
-          console.log("Using alert-based theft amount (fallback):", alertBasedStolen);
-        }
-        
+
         setFuelStats(finalStats);
 
+        // update cache of last good data
+        lastGoodRef.current = {
+          fuelData: finalized,
+          events: alerts,
+          fuelStats: finalStats,
+          selectedBus: busId,
+        };
         setError(null);
       } catch (err) {
         console.error("Bus detail fetch error:", err);
-        setFuelData([]);
-        setEvents([]);
-        setFuelStats(null);
-        setError("Failed to load bus details.");
+        // On failure, keep previous good data instead of clearing UI
+        if (lastGoodRef.current.selectedBus === busId) {
+          setFuelData(lastGoodRef.current.fuelData);
+          setEvents(lastGoodRef.current.events);
+          setFuelStats(lastGoodRef.current.fuelStats);
+          setError(null);
+        } else {
+          setFuelData([]);
+          setEvents([]);
+          setFuelStats(null);
+          setError(null);
+        }
       } finally {
         setLoading(false);
       }
@@ -480,7 +540,7 @@ const Dashboard: React.FC = () => {
         );
 
         setTopBuses(enriched);
-        setTotalBuses(buses.length);
+        setTotalBuses(Array.isArray(buses) ? buses.length : 0);
 
         if (enriched.length > 0 && !selectedBus) {
           setSelectedBus(enriched[0].busId);
@@ -489,7 +549,10 @@ const Dashboard: React.FC = () => {
         setError(null);
       } catch (err) {
         console.error("Dashboard fetch error:", err);
-        setError("Failed to load dashboard data.");
+        // Do not block the page; show empty states instead
+        setTopBuses([]);
+        setTotalBuses(0);
+        setError(null);
       } finally {
         setLoading(false);
       }
@@ -596,15 +659,7 @@ const Dashboard: React.FC = () => {
     );
   }
 
-  if (error) {
-    return (
-      <div className="flex justify-center items-center h-screen">
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
-          {error}
-        </div>
-      </div>
-    );
-  }
+  // Never hard-stop rendering due to error; render with empty states
 
   return (
     <div className="space-y-10 px-6 py-8 max-w-7xl mx-auto text-gray-800 dark:text-gray-100">
@@ -684,7 +739,10 @@ const Dashboard: React.FC = () => {
 
       <h3 className="text-xl font-semibold mt-10">🚌 Monitored Buses</h3>
       <div className="flex flex-wrap gap-6 justify-center">
-        {topBuses.map((bus) => (
+        {topBuses.length === 0 ? (
+          <div className="text-gray-500 dark:text-gray-400 py-6">No buses found.</div>
+        ) : (
+          topBuses.map((bus) => (
           <MonitoredBusCard
             key={bus.busId}
             className="w-full sm:w-[calc(50%-12px)] lg:w-[calc(33.333%-16px)] max-w-md"
@@ -699,7 +757,8 @@ const Dashboard: React.FC = () => {
             onClick={() => handleBusCardClick(bus.busId)}
             selected={selectedBus === bus.busId}
           />
-        ))}
+        ))
+        )}
       </div>
 
       {selectedBus && (

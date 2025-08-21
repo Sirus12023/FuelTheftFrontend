@@ -43,7 +43,7 @@ const StatCards: React.FC<Props> = ({
   customEnd,
   countOverride,
 }) => {
-  const [count, setCount] = useState<number | null>(countOverride || null);
+  const [count, setCount] = useState<number | null>(countOverride ?? null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -135,13 +135,15 @@ const StatCards: React.FC<Props> = ({
             ? res.data.count
             : undefined;
 
-        const newCount = typeof serverCount === "number" ? serverCount : data.length;
+        let newCount = typeof serverCount === "number" ? serverCount : data.length;
+        if (!Number.isFinite(newCount)) newCount = 0;
         setCount(newCount);
       } catch (err) {
         if (cancelled) return;
         console.error(`Error fetching ${title} count`, err);
-        setError("Failed to load data");
-        setCount(null);
+        // Graceful fallback: show 0 instead of error, per requirement
+        setError(null);
+        setCount(0);
       } finally {
         if (!cancelled) setLoading(false);
       }

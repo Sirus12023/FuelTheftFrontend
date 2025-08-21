@@ -37,7 +37,7 @@ const normalizeEvent = (rawType?: string): EventType => {
     : "NORMAL") as EventType;
 };
 
-// strict: only THEFT counts (flip to include "DROP" if backend uses it)
+// Include DROP as theft-equivalent per API docs
 const THEFT_EVENTS = new Set<EventType>(["THEFT", "DROP"]);
 // const THEFT_EVENTS = new Set<EventType>(["THEFT", "DROP"]);
 
@@ -96,7 +96,7 @@ const FuelChart: React.FC<FuelChartProps> = ({
   
         return {
           time: t,
-          fuelLevel: Number(d.fuelLevel),
+          fuelLevel: Number((d as any).fuelLevel ?? (d as any).fuel_level ?? (d as any).level ?? 0),
           event: ev,
           fuelChange: Number.isFinite(ch as number) ? (ch as number) : undefined,
           description: (d as any).description,
@@ -104,6 +104,9 @@ const FuelChart: React.FC<FuelChartProps> = ({
       })
       // NEW: drop bad points so Recharts doesn't render an empty chart
       .filter(p => Number.isFinite(p.fuelLevel));
+    
+    // If there are no events but we have at least one point, ensure the chart still plots a line
+    // by ensuring event defaults to NORMAL (already done in normalize) and keeping points.
   
     let theft = 0;
     for (let i = 0; i < parsed.length; i++) {

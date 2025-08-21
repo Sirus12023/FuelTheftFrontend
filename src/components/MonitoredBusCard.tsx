@@ -76,6 +76,7 @@ const MonitoredBusCard: React.FC<MonitoredBusCardProps> = ({
       onKeyDown={handleKeyDown}
       aria-label={`Bus ${regNumber}, driver ${driver}, route ${route}, fuel ${fuelDisplay} liters, status ${status}${hasTheft ? ", theft detected in range" : ""}`}
       data-theft={hasTheft ? "true" : "false"}
+      data-bus-id={busId}
       className={[
         // << merge external className first to allow width control from parent
         className,
