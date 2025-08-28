@@ -27,6 +27,7 @@ interface ParsedDataPoint {
   event: EventType;
   fuelChange?: number;
   description?: string;
+  originalTimestamp?: string; // Keep original timestamp for reference
 }
 
 // normalize to our 4 event values
@@ -100,6 +101,7 @@ const FuelChart: React.FC<FuelChartProps> = ({
           event: ev,
           fuelChange: Number.isFinite(ch as number) ? (ch as number) : undefined,
           description: (d as any).description,
+          originalTimestamp: String(d.timestamp),
         };
       })
       // NEW: drop bad points so Recharts doesn't render an empty chart
@@ -262,6 +264,13 @@ const FuelChart: React.FC<FuelChartProps> = ({
             style={{ backgroundColor: "#10b981" }}
           />
           Refuel
+        </div>
+        <div className="flex items-center gap-2">
+          <div
+            className="w-3 h-3 rounded-sm"
+            style={{ backgroundColor: "#6b7280" }}
+          />
+          Sensor Health
         </div>
         <div className="flex items-center gap-2">
           <div

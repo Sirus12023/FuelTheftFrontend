@@ -18,6 +18,8 @@ import DashboardTimeFilter from "../components/DashboardTimeFilter";
 import type { TimeRangeValue } from "../components/DashboardTimeFilter";
 import type { FuelReading } from "../types/fuel";
 import { markFuelEvents } from "../utils/markFuelEvents";
+import { useAutoReload } from "../hooks/useAutoReload";
+import { mergeFuelData, filterValidFuelReadings } from "../utils/fuelDataProcessor";
 
 interface Alert {
   id: string;
@@ -42,7 +44,6 @@ interface BusCard {
   routeName: string;
   fuelLevel: number;
   status: "normal" | "alert" | "offline";
-  lastSeen?: string | null;
 }
 
 interface FuelUsageStats {
@@ -130,28 +131,18 @@ const Dashboard: React.FC = () => {
         const details = detailsRes.data;
         
         // Extract readings and alerts from the response
-        // Normalize readings to ensure timestamp and fuelLevel are present
-        const readingsRaw: FuelReading[] =
-          details.sensor?.readings ?? details.readings ?? [];
-        const normalizedReadings: FuelReading[] = (Array.isArray(readingsRaw) ? readingsRaw : [])
-          .map((r: any, idx: number) => {
-            const ts = r.timestamp || r.time || r.createdAt || r.date;
-            const tsNum = typeof ts === "number" ? ts : Date.parse(ts || "");
-            const iso = Number.isFinite(tsNum) ? new Date(tsNum).toISOString() : new Date().toISOString();
-            const levelRaw = r.fuelLevel ?? r.fuel_level ?? r.level ?? r.value ?? r.fuel;
-            const level = Number(levelRaw);
-            return {
-              ...r,
-              id: r.id ?? `${tsNum || Date.now()}-${idx}`,
-              timestamp: iso,
-              fuelLevel: Number.isFinite(level) ? level : 0,
-            } as FuelReading;
-          });
+        const readingsRaw: FuelReading[] = details.sensor?.readings ?? details.readings ?? [];
         let alerts: Alert[] = details.sensor?.Alert ?? details.sensor?.alerts ?? details.alerts ?? [];
+        
+        // Use the new utility to process fuel data
+        const mergedFuelData = mergeFuelData(readingsRaw, alerts);
+        const validFuelData = filterValidFuelReadings(mergedFuelData);
 
         console.log("Raw readings:", readingsRaw);
         console.log("Raw alerts:", alerts);
+        console.log("Processed fuel data:", validFuelData);
         console.log("API Response details:", details);
+        console.log("Fuel data length:", validFuelData.length);
 
         // If no alerts found in vehicle details, try fetching from /history endpoint
         if (alerts.length === 0) {
@@ -202,7 +193,7 @@ const Dashboard: React.FC = () => {
         }
 
         // Sort readings by timestamp
-        const readingsSorted = [...normalizedReadings].sort(
+        const readingsSorted = [...validFuelData].sort(
           (a, b) => new Date(a.timestamp as any).getTime() - new Date(b.timestamp as any).getTime()
         );
 
@@ -364,13 +355,10 @@ const Dashboard: React.FC = () => {
           }
         });
 
-        // Merge and sort all data points
-        const allDataPoints = [...enrichedReadings, ...virtualPoints].sort(
-          (a, b) => new Date(a.timestamp as any).getTime() - new Date(b.timestamp as any).getTime()
-        );
+        // Note: We're now using validFuelData directly instead of the complex merging logic
 
-        // Apply final processing with markFuelEvents
-        const finalized = markFuelEvents(allDataPoints, { infer: true, treatDropAsTheft: true });
+        // Use the processed fuel data directly
+        const finalized = markFuelEvents(validFuelData, { infer: true, treatDropAsTheft: true });
         
         console.log("Finalized fuel data:", finalized);
         console.log("Event breakdown:", finalized.reduce((acc, reading) => {
@@ -480,113 +468,137 @@ const Dashboard: React.FC = () => {
     []
   );
 
+  // --- Fetch dashboard buses function ---
+  const fetchDashboard = useCallback(async () => {
+    try {
+      setLoading(true);
+      const res = await axios.get<any>(`${API_BASE_URL}/vehicles`);
+      const buses = res.data?.data || res.data;
+
+      const toDate = new Date();
+      const fromDate = new Date(toDate.getTime() - 24 * 60 * 60 * 1000);
+      
+      // For testing, use August data where we know there are events
+      // const toDate = new Date('2025-08-31T23:59:59.999Z');
+      // const fromDate = new Date('2025-08-01T00:00:00.000Z');
+
+      const enriched: BusCard[] = await Promise.all(
+        buses.map(async (bus: any) => {
+          try {
+            // Get sensor status from the sensor API (primary endpoint for this backend)
+            let sensorStatus = "offline";
+            let lastSeen = null;
+            try {
+              const sensorRes = await axios.get<any>(`${API_BASE_URL}/sensor`, {
+                params: { busId: bus.id }
+              });
+              const sensorData = sensorRes.data?.data?.[0];
+              if (sensorData) {
+                // Use the proper status values from the API
+                if (sensorData.sensorStatus === "OK") {
+                  sensorStatus = "normal";
+                } else if (sensorData.sensorStatus === "OFFLINE") {
+                  sensorStatus = "offline";
+                } else if (sensorData.sensorStatus === "FAULTY") {
+                  sensorStatus = "offline";
+                } else {
+                  sensorStatus = "offline";
+                }
+                lastSeen = sensorData.lastSeen;
+              }
+            } catch (sensorErr) {
+              console.warn(`Failed to fetch sensor status for bus ${bus.id}:`, sensorErr);
+              // Fallback to vehicle details method
+              sensorStatus = "offline";
+            }
+
+            // Get vehicle details for fuel level and other info
+            const detailsRes = await axios.get<any>(
+              `${API_BASE_URL}/vehicles/${bus.id}/details`,
+              {
+                params: {
+                  include: "readings,alerts,sensor",
+                  fromDate: fromDate.toISOString(),
+                  toDate: toDate.toISOString(),
+                  startDate: fromDate.toISOString(),
+                  endDate: toDate.toISOString(),
+                },
+              }
+            );
+            const details = detailsRes.data;
+            const readings: FuelReading[] =
+              details.sensor?.readings ?? details.readings ?? [];
+            const latestFuel =
+              readings.length > 0
+                ? Number(readings[readings.length - 1].fuelLevel) || 0
+                : 0;
+
+            return {
+              busId: bus.id,
+              registrationNo: bus.registrationNo,
+              driverName: bus.driver || details.driver?.name || "Unknown",
+              routeName: bus.route || details.route?.name || "Unknown",
+              fuelLevel: latestFuel,
+              status: sensorStatus,
+              lastSeen,
+            };
+          } catch {
+            return {
+              busId: bus.id,
+              registrationNo: bus.registrationNo,
+              driverName: bus.driver || "Unknown",
+              routeName: bus.route || "Unknown",
+              fuelLevel: 0,
+              status: "offline",
+              lastSeen: null,
+            };
+          }
+        })
+      );
+
+      setTopBuses(enriched);
+      setTotalBuses(Array.isArray(buses) ? buses.length : 0);
+
+      if (enriched.length > 0 && !selectedBus) {
+        setSelectedBus(enriched[0].busId);
+      }
+
+      setError(null);
+    } catch (err) {
+      console.error("Dashboard fetch error:", err);
+      // Do not block the page; show empty states instead
+      setTopBuses([]);
+      setTotalBuses(0);
+      setError(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedBus, setError]);
+
+  // --- Auto-reload functionality ---
+  useAutoReload({
+    interval: 10 * 60 * 1000, // 10 minutes
+    enabled: true,
+    onReload: fetchDashboard,
+    onError: (error) => {
+      console.error("Auto-reload error:", error);
+    }
+  });
+
   // --- Fetch dashboard buses on mount ---
   useEffect(() => {
-    const fetchDashboard = async () => {
-      try {
-        setLoading(true);
-        const res = await axios.get<any>(`${API_BASE_URL}/vehicles`);
-        const buses = res.data?.data || res.data;
-
-        const toDate = new Date();
-        const fromDate = new Date(toDate.getTime() - 24 * 60 * 60 * 1000);
-        
-        // For testing, use August data where we know there are events
-        // const toDate = new Date('2025-08-31T23:59:59.999Z');
-        // const fromDate = new Date('2025-08-01T00:00:00.000Z');
-
-        const enriched: BusCard[] = await Promise.all(
-          buses.map(async (bus: any) => {
-            try {
-              // First, get sensor status from the dedicated sensor health API
-              let sensorStatus = "offline";
-              let lastSeen = null;
-              try {
-                const sensorRes = await axios.get<any>(`${API_BASE_URL}/sensors/health?busId=${bus.id}`);
-                const sensorData = sensorRes.data?.data?.[0];
-                if (sensorData) {
-                  // Use the proper status values from the API
-                  if (sensorData.sensorStatus === "OK") {
-                    sensorStatus = "normal";
-                  } else if (sensorData.sensorStatus === "OFFLINE") {
-                    sensorStatus = "offline";
-                  } else if (sensorData.sensorStatus === "FAULTY") {
-                    sensorStatus = "offline";
-                  } else {
-                    sensorStatus = "offline";
-                  }
-                  lastSeen = sensorData.lastSeen;
-                }
-              } catch (sensorErr) {
-                console.warn(`Failed to fetch sensor status for bus ${bus.id}:`, sensorErr);
-              }
-
-              // Get vehicle details for fuel level and other info
-              const detailsRes = await axios.get<any>(
-                `${API_BASE_URL}/vehicles/${bus.id}/details`,
-                {
-                  params: {
-                    include: "readings,alerts,sensor",
-                    fromDate: fromDate.toISOString(),
-                    toDate: toDate.toISOString(),
-                    startDate: fromDate.toISOString(),
-                    endDate: toDate.toISOString(),
-                  },
-                }
-              );
-              const details = detailsRes.data;
-              const readings: FuelReading[] =
-                details.sensor?.readings ?? details.readings ?? [];
-              const latestFuel =
-                readings.length > 0
-                  ? Number(readings[readings.length - 1].fuelLevel) || 0
-                  : 0;
-
-              return {
-                busId: bus.id,
-                registrationNo: bus.registrationNo,
-                driverName: bus.driver || details.driver?.name || "Unknown",
-                routeName: bus.route || details.route?.name || "Unknown",
-                fuelLevel: latestFuel,
-                status: sensorStatus,
-                lastSeen,
-              };
-            } catch {
-              return {
-                busId: bus.id,
-                registrationNo: bus.registrationNo,
-                driverName: bus.driver || "Unknown",
-                routeName: bus.route || "Unknown",
-                fuelLevel: 0,
-                status: "offline",
-                lastSeen: null,
-              };
-            }
-          })
-        );
-
-        setTopBuses(enriched);
-        setTotalBuses(Array.isArray(buses) ? buses.length : 0);
-
-        if (enriched.length > 0 && !selectedBus) {
-          setSelectedBus(enriched[0].busId);
-        }
-
-        setError(null);
-      } catch (err) {
-        console.error("Dashboard fetch error:", err);
-        // Do not block the page; show empty states instead
-        setTopBuses([]);
-        setTotalBuses(0);
-        setError(null);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchDashboard();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [fetchDashboard]);
+
+  // --- Auto-reload every 10 minutes ---
+  useEffect(() => {
+    const interval = setInterval(() => {
+      console.log('Auto-reload: Refreshing dashboard data...');
+      fetchDashboard();
+    }, 10 * 60 * 1000); // 10 minutes
+
+    return () => clearInterval(interval);
+  }, [fetchDashboard]);
 
   // --- Build date range (and validate) ---
   const range = useMemo(() => {
@@ -738,7 +750,7 @@ const Dashboard: React.FC = () => {
           title="Ongoing Alerts"
           icon="alert"
           color="from-red-500 to-red-700"
-          apiPath="/history"
+          apiPath="/history?type=THEFT,DROP,REFUEL"
           timeRange={timeRange}
           customStart={customStart}
           customEnd={customEnd}
@@ -769,21 +781,20 @@ const Dashboard: React.FC = () => {
           <div className="text-gray-500 dark:text-gray-400 py-6">No buses found.</div>
         ) : (
           topBuses.map((bus) => (
-                      <MonitoredBusCard
-              key={bus.busId}
-              className="w-full sm:w-[calc(50%-12px)] lg:w-[calc(33.333%-16px)] max-w-md"
-              busId={bus.busId}
-              regNumber={bus.registrationNo}
-              driver={bus.driverName}
-              route={bus.routeName}
-              fuelLevel={bus.fuelLevel}
-              status={bus.status}
-              hasTheft={theftBusIds.has(bus.busId)}
-              imageUrl={busImage}
-              onClick={() => handleBusCardClick(bus.busId)}
-              selected={selectedBus === bus.busId}
-              lastSeen={bus.lastSeen}
-            />
+          <MonitoredBusCard
+            key={bus.busId}
+            className="w-full sm:w-[calc(50%-12px)] lg:w-[calc(33.333%-16px)] max-w-md"
+            busId={bus.busId}
+            regNumber={bus.registrationNo}
+            driver={bus.driverName}
+            route={bus.routeName}
+            fuelLevel={bus.fuelLevel}
+            status={bus.status}
+            hasTheft={theftBusIds.has(bus.busId)}
+            imageUrl={busImage}
+            onClick={() => handleBusCardClick(bus.busId)}
+            selected={selectedBus === bus.busId}
+          />
         ))
         )}
       </div>

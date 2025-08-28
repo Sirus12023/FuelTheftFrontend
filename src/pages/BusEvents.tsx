@@ -5,6 +5,7 @@ import { useLocation } from "react-router-dom";
 import { API_BASE_URL } from "../config";
 import { getDateRange } from "../utils/dateRangeFromTimeOption";
 import LocationMapModal from "../components/LocationMapModal";
+import { smartGpsConverter } from "../utils/gpsConverter";
 
 interface AlertRow {
   id: string;
@@ -134,10 +135,17 @@ const BusEvents: React.FC = () => {
         const formatted: AlertRow[] = historyData.map((a: any) => {
           // location shape normalization
           const loc = a.location || a.gps || null;
-          const latitude =
+          const rawLatitude =
             loc?.latitude ?? loc?.lat ?? (typeof a.latitude === "number" ? a.latitude : undefined);
-          const longitude =
+          const rawLongitude =
             loc?.longitude ?? loc?.long ?? (typeof a.longitude === "number" ? a.longitude : undefined);
+
+          // Convert GPS coordinates from Teltonika FMB920 format
+          let location = null;
+          if (rawLatitude != null && rawLongitude != null) {
+            const converted = smartGpsConverter(rawLatitude, rawLongitude);
+            location = { latitude: converted.latitude, longitude: converted.longitude };
+          }
 
           // fuel change normalization
           const fuelChange: number | undefined =
@@ -150,7 +158,7 @@ const BusEvents: React.FC = () => {
             type: (a.type || "").toUpperCase(),
             timestamp: a.timestamp,
             description: a.description || "",
-            location: latitude != null && longitude != null ? { latitude, longitude } : null,
+            location,
             bus: {
               id: vehicleId,
               registrationNumber: v?.registrationNo || selectedBus,
