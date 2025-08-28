@@ -58,6 +58,7 @@ interface BusDetails {
   route: string;
   currentFuelLevel: number;
   status: "normal" | "offline";
+  lastSeen?: string | null;
 }
 
 const FuelTheft: React.FC = () => {
@@ -167,21 +168,46 @@ const FuelTheft: React.FC = () => {
         const fromDate = (startDate ?? new Date(now.setHours(0, 0, 0, 0))).toISOString();
         const toDate = (endDate ?? new Date()).toISOString();
 
-        // 1) Fetch sensor(s) for this vehicle to determine sensorId and status
-        let sensorStatus = true;
+        // 1) Fetch sensor status from the dedicated sensor health API
+        let sensorStatus = "offline";
         let allowedSensorIds: string[] = [];
+        let lastSeen = null;
         try {
-          const sensorRes = await axios.get(`${API_BASE_URL}/sensor`, {
-            params: { [SENSOR_ID_PARAM]: selectedVehicleId },
-          });
-          const sensors = Array.isArray(sensorRes.data) ? sensorRes.data : [];
-          sensorStatus = sensors.length === 0 ? true : sensors.every((s: any) => s.isActive !== false);
-          allowedSensorIds = sensors
-            .map((s: any) => String(s.id || s.sensorId || s.serial || s.name || "").trim())
-            .filter((x: string) => x.length > 0);
-        } catch {
-          sensorStatus = true;
-          allowedSensorIds = [];
+          const sensorRes = await axios.get<any>(`${API_BASE_URL}/sensors/health?busId=${selectedVehicleId}`);
+          const sensorData = sensorRes.data?.data?.[0];
+          if (sensorData) {
+            // Use the proper status values from the API
+            if (sensorData.sensorStatus === "OK") {
+              sensorStatus = "normal";
+            } else if (sensorData.sensorStatus === "OFFLINE") {
+              sensorStatus = "offline";
+            } else if (sensorData.sensorStatus === "FAULTY") {
+              sensorStatus = "offline";
+            } else {
+              sensorStatus = "offline";
+            }
+            lastSeen = sensorData.lastSeen;
+            // Extract sensor ID for filtering
+            if (sensorData.sensorId) {
+              allowedSensorIds = [sensorData.sensorId];
+            }
+          }
+        } catch (sensorErr) {
+          console.warn(`Failed to fetch sensor status for vehicle ${selectedVehicleId}:`, sensorErr);
+          // Fallback to old sensor endpoint
+          try {
+            const fallbackRes = await axios.get(`${API_BASE_URL}/sensor`, {
+              params: { [SENSOR_ID_PARAM]: selectedVehicleId },
+            });
+            const sensors = Array.isArray(fallbackRes.data) ? fallbackRes.data : [];
+            sensorStatus = sensors.length === 0 ? "normal" : sensors.every((s: any) => s.isActive !== false) ? "normal" : "offline";
+            allowedSensorIds = sensors
+              .map((s: any) => String(s.id || s.sensorId || s.serial || s.name || "").trim())
+              .filter((x: string) => x.length > 0);
+          } catch {
+            sensorStatus = "offline";
+            allowedSensorIds = [];
+          }
         }
 
         let res: { data: VehicleDetailResponse };
@@ -453,11 +479,25 @@ const FuelTheft: React.FC = () => {
         setNoData(readings.length === 0);
 
         const v = vehicles.find((x) => x.id === selectedVehicleId);
+        
+        // Get current fuel level from the most recent reading
+        let currentFuelLevel = 0;
+        if (readings.length > 0) {
+          // Use the most recent reading from finalized data
+          const latestReading = readings[readings.length - 1];
+          currentFuelLevel = Number(latestReading.fuelLevel) || 0;
+        } else if (normalizedReadings.length > 0) {
+          // Fallback to normalized readings if no finalized data
+          const latestNormalized = normalizedReadings[normalizedReadings.length - 1];
+          currentFuelLevel = Number(latestNormalized.fuelLevel) || 0;
+        }
+        
         // Update bus details with current fuel level and status
         setBusDetails(prev => ({
           ...prev!,
-          currentFuelLevel: (normalizedReadings.at(-1)?.fuelLevel as number) ?? 0,
-          status: sensorStatus ? "normal" : "offline",
+          currentFuelLevel,
+          status: sensorStatus as "normal" | "offline",
+          lastSeen,
         }));
 
         const usage = await axios.get<FuelUsageStats>(`${API_BASE_URL}/fuelusage`, {

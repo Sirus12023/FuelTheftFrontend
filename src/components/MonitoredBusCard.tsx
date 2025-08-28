@@ -16,6 +16,7 @@ interface MonitoredBusCardProps {
   hasTheft?: boolean;
   /** NEW: allow external styling from Dashboard */
   className?: string;
+  lastSeen?: string | null;
 }
 
 const MonitoredBusCard: React.FC<MonitoredBusCardProps> = ({
@@ -30,6 +31,7 @@ const MonitoredBusCard: React.FC<MonitoredBusCardProps> = ({
   selected = false,
   hasTheft = false,
   className = "",
+  lastSeen,
 }) => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -54,6 +56,15 @@ const MonitoredBusCard: React.FC<MonitoredBusCardProps> = ({
       case "alert": return "bg-red-500 text-white";
       case "offline": return "bg-gray-500 text-white";
       default: return "bg-green-500 text-white";
+    }
+  };
+
+  const getStatusText = () => {
+    switch (status) {
+      case "alert": return "Alert";
+      case "offline": return "Offline";
+      case "normal": return "Online";
+      default: return status;
     }
   };
 
@@ -118,12 +129,18 @@ const MonitoredBusCard: React.FC<MonitoredBusCardProps> = ({
             ⛽ Fuel: {fuelDisplay} L
           </div>
           <div className={`px-2 py-0.5 text-[10px] rounded-full font-bold uppercase ${getStatusBadge()}`}>
-            {status}
+            {getStatusText()}
           </div>
         </div>
+        {lastSeen && (
+          <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            Last seen: {new Date(lastSeen).toLocaleString()}
+          </div>
+        )}
       </div>
     </div>
   );
 };
 
 export default MonitoredBusCard;
+

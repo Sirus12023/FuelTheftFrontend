@@ -42,6 +42,7 @@ interface BusCard {
   routeName: string;
   fuelLevel: number;
   status: "normal" | "alert" | "offline";
+  lastSeen?: string | null;
 }
 
 interface FuelUsageStats {
@@ -497,6 +498,30 @@ const Dashboard: React.FC = () => {
         const enriched: BusCard[] = await Promise.all(
           buses.map(async (bus: any) => {
             try {
+              // First, get sensor status from the dedicated sensor health API
+              let sensorStatus = "offline";
+              let lastSeen = null;
+              try {
+                const sensorRes = await axios.get<any>(`${API_BASE_URL}/sensors/health?busId=${bus.id}`);
+                const sensorData = sensorRes.data?.data?.[0];
+                if (sensorData) {
+                  // Use the proper status values from the API
+                  if (sensorData.sensorStatus === "OK") {
+                    sensorStatus = "normal";
+                  } else if (sensorData.sensorStatus === "OFFLINE") {
+                    sensorStatus = "offline";
+                  } else if (sensorData.sensorStatus === "FAULTY") {
+                    sensorStatus = "offline";
+                  } else {
+                    sensorStatus = "offline";
+                  }
+                  lastSeen = sensorData.lastSeen;
+                }
+              } catch (sensorErr) {
+                console.warn(`Failed to fetch sensor status for bus ${bus.id}:`, sensorErr);
+              }
+
+              // Get vehicle details for fuel level and other info
               const detailsRes = await axios.get<any>(
                 `${API_BASE_URL}/vehicles/${bus.id}/details`,
                 {
@@ -516,7 +541,6 @@ const Dashboard: React.FC = () => {
                 readings.length > 0
                   ? Number(readings[readings.length - 1].fuelLevel) || 0
                   : 0;
-              const isSensorActive = details.sensor?.isActive !== false;
 
               return {
                 busId: bus.id,
@@ -524,7 +548,8 @@ const Dashboard: React.FC = () => {
                 driverName: bus.driver || details.driver?.name || "Unknown",
                 routeName: bus.route || details.route?.name || "Unknown",
                 fuelLevel: latestFuel,
-                status: isSensorActive ? "normal" : "offline",
+                status: sensorStatus,
+                lastSeen,
               };
             } catch {
               return {
@@ -534,6 +559,7 @@ const Dashboard: React.FC = () => {
                 routeName: bus.route || "Unknown",
                 fuelLevel: 0,
                 status: "offline",
+                lastSeen: null,
               };
             }
           })
@@ -622,7 +648,7 @@ const Dashboard: React.FC = () => {
           const reg =
             a.bus?.registrationNumber ||
             a.bus?.registrationNo ||
-            undefined;
+            "";
           if (reg && regToId[reg]) {
             ids.add(regToId[reg]);
           }
@@ -743,20 +769,21 @@ const Dashboard: React.FC = () => {
           <div className="text-gray-500 dark:text-gray-400 py-6">No buses found.</div>
         ) : (
           topBuses.map((bus) => (
-          <MonitoredBusCard
-            key={bus.busId}
-            className="w-full sm:w-[calc(50%-12px)] lg:w-[calc(33.333%-16px)] max-w-md"
-            busId={bus.busId}
-            regNumber={bus.registrationNo}
-            driver={bus.driverName}
-            route={bus.routeName}
-            fuelLevel={bus.fuelLevel}
-            status={bus.status}
-            hasTheft={theftBusIds.has(bus.busId)}
-            imageUrl={busImage}
-            onClick={() => handleBusCardClick(bus.busId)}
-            selected={selectedBus === bus.busId}
-          />
+                      <MonitoredBusCard
+              key={bus.busId}
+              className="w-full sm:w-[calc(50%-12px)] lg:w-[calc(33.333%-16px)] max-w-md"
+              busId={bus.busId}
+              regNumber={bus.registrationNo}
+              driver={bus.driverName}
+              route={bus.routeName}
+              fuelLevel={bus.fuelLevel}
+              status={bus.status}
+              hasTheft={theftBusIds.has(bus.busId)}
+              imageUrl={busImage}
+              onClick={() => handleBusCardClick(bus.busId)}
+              selected={selectedBus === bus.busId}
+              lastSeen={bus.lastSeen}
+            />
         ))
         )}
       </div>
