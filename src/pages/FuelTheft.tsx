@@ -13,7 +13,7 @@ import { determineSensorStatus } from "../utils/sensorStatus";
 import type { FuelReading } from "../types/fuel";
 
 // Backend expects `busId` for /sensor per API spec
-const SENSOR_ID_PARAM = "busId" as const;
+// const SENSOR_ID_PARAM = "busId" as const;
 
 type ISODate = string;
 

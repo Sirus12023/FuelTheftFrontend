@@ -3,12 +3,12 @@ import type { FuelReading } from "../types/fuel";
 // Define EventType here since it's not exported from types/fuel
 export type EventType = "NORMAL" | "REFUEL" | "THEFT" | "DROP";
 
-const normalizeEvent = (t?: string | null): EventType => {
-  const upper = String(t ?? "NORMAL").toUpperCase();
-  return (upper === "REFUEL" || upper === "THEFT" || upper === "DROP"
-    ? upper
-    : "NORMAL") as EventType;
-};
+// const normalizeEvent = (t?: string | null): EventType => {
+//   const upper = String(t ?? "NORMAL").toUpperCase();
+//   return (upper === "REFUEL" || upper === "THEFT" || upper === "DROP"
+//     ? upper
+//     : "NORMAL") as EventType;
+// };
 
 const EPS = 0.2;
 const REFUEL_MIN = 10;
@@ -74,7 +74,7 @@ export function markFuelEvents(
     return {
       ...row,
       id,
-      eventType: event,
+      eventType: event as EventType,
       fuelChange,
     };
   });

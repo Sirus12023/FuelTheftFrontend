@@ -1,0 +1,16 @@
+{
+  "projectId": "prj_uBen8a47HixQUgBgxHnbKh7AX9Bx",
+  "orgId": "team_3meRq7SbWsfHoM5mBVSczuWJ",
+  "projectName": "fuel-theft-frontend",
+  "settings": {
+    "createdAt": 1756371253639,
+    "framework": "vite",
+    "devCommand": null,
+    "installCommand": "npm ci",
+    "buildCommand": "npm run build",
+    "outputDirectory": "dist",
+    "rootDirectory": null,
+    "directoryListing": false,
+    "nodeVersion": "22.x"
+  }
+}
