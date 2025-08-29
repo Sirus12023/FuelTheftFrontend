@@ -18,6 +18,7 @@ import DashboardTimeFilter from "../components/DashboardTimeFilter";
 import type { TimeRangeValue } from "../components/DashboardTimeFilter";
 import type { FuelReading } from "../types/fuel";
 import { markFuelEvents } from "../utils/markFuelEvents";
+import { determineSensorStatus } from "../utils/sensorStatus";
 
 interface Alert {
   id: string;
@@ -72,9 +73,10 @@ const Dashboard: React.FC = () => {
     selectedBus: string | null;
   }>({ fuelData: [], events: [], fuelStats: null, selectedBus: null });
 
+  // For testing, use August data where we know there are events
   const [timeRange, setTimeRange] = useState<TimeRangeValue>("today");
-  const [customStart, setCustomStart] = useState("");
-  const [customEnd, setCustomEnd] = useState("");
+  const [customStart, setCustomStart] = useState("2025-08-01");
+  const [customEnd, setCustomEnd] = useState("2025-08-31");
 
   const chartRef = useRef<HTMLDivElement | null>(null);
 
@@ -220,6 +222,8 @@ const Dashboard: React.FC = () => {
         const enrichedReadings: FuelReading[] = readingsSorted.map((reading, index) => {
           const readingTime = new Date(reading.timestamp as any).getTime();
           
+
+          
           // Extract event information from the reading's raw data
           const rawData = (reading as any).raw?.sim;
           let eventType = "NORMAL";
@@ -292,9 +296,19 @@ const Dashboard: React.FC = () => {
             // Try to extract fuel change from alert
             if (typeof (primaryAlert as any).fuelChange === "number") {
               fuelChange = (primaryAlert as any).fuelChange;
+            } else if (primaryAlert.description) {
+              // Extract fuel change from description like "Δ=+7787.00L" or "Δ=-5.05L"
+              const match = primaryAlert.description.match(/Δ=([+-])([\d.]+)L/);
+              if (match) {
+                const sign = match[1];
+                const amount = parseFloat(match[2]);
+                fuelChange = sign === '+' ? amount : -amount;
+              }
             }
           }
 
+
+          
           return {
             ...reading,
             id: reading.id ?? `${readingTime}-${index}`,
@@ -359,7 +373,20 @@ const Dashboard: React.FC = () => {
               fuelLevel: closestReading ? Number(closestReading.fuelLevel) : 0,
               eventType,
               description: alert.description || `${eventType} detected`,
-              fuelChange: typeof (alert as any).fuelChange === "number" ? (alert as any).fuelChange : undefined,
+              fuelChange: (() => {
+                if (typeof (alert as any).fuelChange === "number") {
+                  return (alert as any).fuelChange;
+                } else if (alert.description) {
+                  // Extract fuel change from description like "Δ=+7787.00L" or "Δ=-5.05L"
+                  const match = alert.description.match(/Δ=([+-])([\d.]+)L/);
+                  if (match) {
+                    const sign = match[1];
+                    const amount = parseFloat(match[2]);
+                    return sign === '+' ? amount : -amount;
+                  }
+                }
+                return undefined;
+              })(),
             } as FuelReading);
           }
         });
@@ -370,14 +397,7 @@ const Dashboard: React.FC = () => {
         );
 
         // Apply final processing with markFuelEvents
-        const finalized = markFuelEvents(allDataPoints, { infer: true, treatDropAsTheft: true });
-        
-        console.log("Finalized fuel data:", finalized);
-        console.log("Event breakdown:", finalized.reduce((acc, reading) => {
-          const eventType = (reading as any).eventType || "NORMAL";
-          acc[eventType] = (acc[eventType] || 0) + 1;
-          return acc;
-        }, {} as Record<string, number>));
+        const finalized = markFuelEvents(allDataPoints, { infer: false, treatDropAsTheft: true });
         
         setFuelData(finalized);
         setEvents(alerts);
@@ -480,7 +500,7 @@ const Dashboard: React.FC = () => {
     []
   );
 
-  // --- Fetch dashboard buses on mount ---
+  // --- Fetch dashboard buses on mount and auto-reload every 15 minutes ---
   useEffect(() => {
     const fetchDashboard = async () => {
       try {
@@ -488,38 +508,22 @@ const Dashboard: React.FC = () => {
         const res = await axios.get<any>(`${API_BASE_URL}/vehicles`);
         const buses = res.data?.data || res.data;
 
-        const toDate = new Date();
-        const fromDate = new Date(toDate.getTime() - 24 * 60 * 60 * 1000);
-        
         // For testing, use August data where we know there are events
-        // const toDate = new Date('2025-08-31T23:59:59.999Z');
-        // const fromDate = new Date('2025-08-01T00:00:00.000Z');
+        const toDate = new Date('2025-08-31T23:59:59.999Z');
+        const fromDate = new Date('2025-08-01T00:00:00.000Z');
+        
+        // const toDate = new Date();
+        // const fromDate = new Date(toDate.getTime() - 24 * 60 * 60 * 1000);
 
         const enriched: BusCard[] = await Promise.all(
           buses.map(async (bus: any) => {
             try {
-              // First, get sensor status from the dedicated sensor health API
-              let sensorStatus = "offline";
-              let lastSeen = null;
-              try {
-                const sensorRes = await axios.get<any>(`${API_BASE_URL}/sensors/health?busId=${bus.id}`);
-                const sensorData = sensorRes.data?.data?.[0];
-                if (sensorData) {
-                  // Use the proper status values from the API
-                  if (sensorData.sensorStatus === "OK") {
-                    sensorStatus = "normal";
-                  } else if (sensorData.sensorStatus === "OFFLINE") {
-                    sensorStatus = "offline";
-                  } else if (sensorData.sensorStatus === "FAULTY") {
-                    sensorStatus = "offline";
-                  } else {
-                    sensorStatus = "offline";
-                  }
-                  lastSeen = sensorData.lastSeen;
-                }
-              } catch (sensorErr) {
-                console.warn(`Failed to fetch sensor status for bus ${bus.id}:`, sensorErr);
-              }
+              // Determine sensor status using utility function
+              const sensorStatus = determineSensorStatus({
+                sensorStatus: bus.sensorStatus,
+                sensorLastSeen: bus.sensorLastSeen
+              });
+              const lastSeen = bus.sensorLastSeen;
 
               // Get vehicle details for fuel level and other info
               const detailsRes = await axios.get<any>(
@@ -584,17 +588,24 @@ const Dashboard: React.FC = () => {
       }
     };
 
+    // Initial fetch
     fetchDashboard();
+
+    // Set up auto-reload every 15 minutes (900,000 milliseconds)
+    const intervalId = setInterval(fetchDashboard, 15 * 60 * 1000);
+
+    // Cleanup interval on component unmount
+    return () => clearInterval(intervalId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // --- Build date range (and validate) ---
   const range = useMemo(() => {
     if (timeRange === "custom") {
-      return {
-        startDate: customStart ? new Date(customStart) : undefined,
-        endDate: customEnd ? new Date(customEnd) : undefined,
-      };
+      // Create dates in UTC to match API expectations
+      const startDate = customStart ? new Date(customStart + 'T00:00:00.000Z') : undefined;
+      const endDate = customEnd ? new Date(customEnd + 'T23:59:59.999Z') : undefined;
+      return { startDate, endDate };
     }
     return getDateRange(timeRange);
   }, [timeRange, customStart, customEnd]);
@@ -738,7 +749,7 @@ const Dashboard: React.FC = () => {
           title="Ongoing Alerts"
           icon="alert"
           color="from-red-500 to-red-700"
-          apiPath="/history"
+          apiPath="/history?type=THEFT,REFUEL,DROP"
           timeRange={timeRange}
           customStart={customStart}
           customEnd={customEnd}
@@ -800,6 +811,7 @@ const Dashboard: React.FC = () => {
               fuelData={Array.isArray(fuelData) ? fuelData : []}
               busId={selectedBus}
               theftTotalOverride={fuelStats?.totalFuelStolen}
+              sensorStatus={topBuses.find((b) => b.busId === selectedBus)?.status}
             />
           </div>
         </div>

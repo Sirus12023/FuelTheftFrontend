@@ -2,6 +2,7 @@
 import React from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { AlertTriangle } from "lucide-react";
+import { getStatusBadgeClasses, getStatusText } from "../utils/sensorStatus";
 
 interface MonitoredBusCardProps {
   imageUrl?: string;
@@ -51,22 +52,8 @@ const MonitoredBusCard: React.FC<MonitoredBusCardProps> = ({
     }
   };
 
-  const getStatusBadge = () => {
-    switch (status) {
-      case "alert": return "bg-red-500 text-white";
-      case "offline": return "bg-gray-500 text-white";
-      default: return "bg-green-500 text-white";
-    }
-  };
-
-  const getStatusText = () => {
-    switch (status) {
-      case "alert": return "Alert";
-      case "offline": return "Offline";
-      case "normal": return "Online";
-      default: return status;
-    }
-  };
+  const statusBadgeClasses = getStatusBadgeClasses(status);
+  const statusDisplayText = getStatusText(status);
 
   const fuelNum = typeof fuelLevel === "string" ? Number(fuelLevel) : (fuelLevel as number);
   const fuelDisplay = Number.isFinite(fuelNum) ? fuelNum.toFixed(1) : "0.0";
@@ -128,8 +115,8 @@ const MonitoredBusCard: React.FC<MonitoredBusCardProps> = ({
           <div className="text-xs text-blue-600 dark:text-blue-300 font-medium">
             ⛽ Fuel: {fuelDisplay} L
           </div>
-          <div className={`px-2 py-0.5 text-[10px] rounded-full font-bold uppercase ${getStatusBadge()}`}>
-            {getStatusText()}
+          <div className={`px-2 py-0.5 text-[10px] rounded-full font-bold uppercase ${statusBadgeClasses}`}>
+            {statusDisplayText}
           </div>
         </div>
         {lastSeen && (

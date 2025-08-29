@@ -9,6 +9,7 @@ import MonitoredBusCard from "../components/MonitoredBusCard";
 import { getDateRange } from "../utils/dateRangeFromTimeOption";
 import FuelStatsGrid from "../components/FuelStatsGrid";
 import { markFuelEvents } from "../utils/markFuelEvents";
+import { determineSensorStatus } from "../utils/sensorStatus";
 import type { FuelReading } from "../types/fuel";
 
 // Backend expects `busId` for /sensor per API spec
@@ -81,9 +82,10 @@ const FuelTheft: React.FC = () => {
   const [selectedReg, setSelectedReg] = useState<string | null>(null); // registration number for UI/URL
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null); // internal id for API calls
   const [search, setSearch] = useState("");
+  // For testing, use August data where we know there are events
   const [timeRange, setTimeRange] = useState("today");
-  const [customStart, setCustomStart] = useState<string>("");
-  const [customEnd, setCustomEnd] = useState<string>("");
+  const [customStart, setCustomStart] = useState<string>("2025-08-01");
+  const [customEnd, setCustomEnd] = useState<string>("2025-08-31");
 
   const [fuelData, setFuelData] = useState<FuelReading[]>([]);
   const [busDetails, setBusDetails] = useState<BusDetails | null>(null);
@@ -153,8 +155,8 @@ const FuelTheft: React.FC = () => {
     const range =
       timeRange === "custom"
         ? {
-            startDate: customStart ? new Date(customStart) : undefined,
-            endDate: customEnd ? new Date(customEnd) : undefined,
+            startDate: customStart ? new Date(customStart + 'T00:00:00.000Z') : undefined,
+            endDate: customEnd ? new Date(customEnd + 'T23:59:59.999Z') : undefined,
           }
         : getDateRange(timeRange);
 
@@ -168,46 +170,26 @@ const FuelTheft: React.FC = () => {
         const fromDate = (startDate ?? new Date(now.setHours(0, 0, 0, 0))).toISOString();
         const toDate = (endDate ?? new Date()).toISOString();
 
-        // 1) Fetch sensor status from the dedicated sensor health API
+        // 1) Get vehicle info to determine sensor status
         let sensorStatus = "offline";
         let allowedSensorIds: string[] = [];
         let lastSeen = null;
+        
         try {
-          const sensorRes = await axios.get<any>(`${API_BASE_URL}/sensors/health?busId=${selectedVehicleId}`);
-          const sensorData = sensorRes.data?.data?.[0];
-          if (sensorData) {
-            // Use the proper status values from the API
-            if (sensorData.sensorStatus === "OK") {
-              sensorStatus = "normal";
-            } else if (sensorData.sensorStatus === "OFFLINE") {
-              sensorStatus = "offline";
-            } else if (sensorData.sensorStatus === "FAULTY") {
-              sensorStatus = "offline";
-            } else {
-              sensorStatus = "offline";
-            }
-            lastSeen = sensorData.lastSeen;
-            // Extract sensor ID for filtering
-            if (sensorData.sensorId) {
-              allowedSensorIds = [sensorData.sensorId];
-            }
-          }
-        } catch (sensorErr) {
-          console.warn(`Failed to fetch sensor status for vehicle ${selectedVehicleId}:`, sensorErr);
-          // Fallback to old sensor endpoint
-          try {
-            const fallbackRes = await axios.get(`${API_BASE_URL}/sensor`, {
-              params: { [SENSOR_ID_PARAM]: selectedVehicleId },
+          const vehicleRes = await axios.get<any>(`${API_BASE_URL}/vehicles`);
+          const vehicles = vehicleRes.data?.data || vehicleRes.data;
+          const vehicle = vehicles.find((v: any) => v.id === selectedVehicleId);
+          
+          if (vehicle) {
+            lastSeen = vehicle.sensorLastSeen;
+            sensorStatus = determineSensorStatus({
+              sensorStatus: vehicle.sensorStatus,
+              sensorLastSeen: vehicle.sensorLastSeen
             });
-            const sensors = Array.isArray(fallbackRes.data) ? fallbackRes.data : [];
-            sensorStatus = sensors.length === 0 ? "normal" : sensors.every((s: any) => s.isActive !== false) ? "normal" : "offline";
-            allowedSensorIds = sensors
-              .map((s: any) => String(s.id || s.sensorId || s.serial || s.name || "").trim())
-              .filter((x: string) => x.length > 0);
-          } catch {
-            sensorStatus = "offline";
-            allowedSensorIds = [];
           }
+        } catch (vehicleErr) {
+          console.warn(`Failed to fetch vehicle info for ${selectedVehicleId}:`, vehicleErr);
+          sensorStatus = "offline";
         }
 
         let res: { data: VehicleDetailResponse };
@@ -608,6 +590,19 @@ const FuelTheft: React.FC = () => {
     };
 
     fetchBusData();
+
+    // Set up auto-reload every 15 minutes (900,000 milliseconds) if a bus is selected
+    let intervalId: NodeJS.Timeout | null = null;
+    if (selectedVehicleId) {
+      intervalId = setInterval(fetchBusData, 15 * 60 * 1000);
+    }
+
+    // Cleanup interval on component unmount or when dependencies change
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
   }, [selectedVehicleId, timeRange, customStart, customEnd, vehicles]);
 
   return (
@@ -692,6 +687,7 @@ const FuelTheft: React.FC = () => {
             fuelData={Array.isArray(fuelData) ? fuelData : []}
             busId={selectedVehicleId}
             theftTotalOverride={fuelStats?.totalFuelStolen}
+            sensorStatus={busDetails?.status}
           />
           {fuelStats && (
             <FuelStatsGrid

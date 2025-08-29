@@ -72,8 +72,9 @@ const StatCards: React.FC<Props> = ({
           setCount(null);
           return;
         }
-        startDate = new Date(customStart);
-        endDate = new Date(customEnd);
+        // Create dates in UTC to match API expectations
+        startDate = new Date(customStart + 'T00:00:00.000Z');
+        endDate = new Date(customEnd + 'T23:59:59.999Z');
       } else {
         const rangeObj = getDateRange(timeRange);
         startDate = rangeObj?.startDate;

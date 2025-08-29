@@ -45,9 +45,10 @@ const BusEvents: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedBus, setSelectedBus] = useState<string | null>(null); // registration number
   const [typeFilter, setTypeFilter] = useState<string>("");
-  const [dateFilter, setDateFilter] = useState<string>("all"); // all|today|yesterday|week|month|custom
-  const [customStartDate, setCustomStartDate] = useState("");
-  const [customEndDate, setCustomEndDate] = useState("");
+  // For testing, use August data where we know there are events
+  const [dateFilter, setDateFilter] = useState<string>("today"); // all|today|yesterday|week|month|custom
+  const [customStartDate, setCustomStartDate] = useState("2025-08-01");
+  const [customEndDate, setCustomEndDate] = useState("2025-08-31");
   const [currentPage, setCurrentPage] = useState(1);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [showMap, setShowMap] = useState(false);
@@ -88,8 +89,8 @@ const BusEvents: React.FC = () => {
   const computeRange = useCallback((): { fromDate?: string; toDate?: string } => {
     if (dateFilter === "all") return {};
     if (dateFilter === "custom") {
-      const s = customStartDate ? new Date(customStartDate) : undefined;
-      const e = customEndDate ? new Date(customEndDate) : undefined;
+      const s = customStartDate ? new Date(customStartDate + 'T00:00:00.000Z') : undefined;
+      const e = customEndDate ? new Date(customEndDate + 'T23:59:59.999Z') : undefined;
       if (s && e) return { fromDate: s.toISOString(), toDate: e.toISOString() };
       return {};
     }
@@ -172,6 +173,19 @@ const BusEvents: React.FC = () => {
     };
 
     fetchHistory();
+
+    // Set up auto-reload every 15 minutes (900,000 milliseconds) if a bus is selected
+    let intervalId: NodeJS.Timeout | null = null;
+    if (selectedBus) {
+      intervalId = setInterval(fetchHistory, 15 * 60 * 1000);
+    }
+
+    // Cleanup interval on component unmount or when dependencies change
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
   }, [selectedBus, typeFilter, dateFilter, customStartDate, customEndDate, regToId, vehicles, computeRange]);
 
   // Client-side filtered view (kept to support text search and extra filters)
@@ -198,8 +212,8 @@ const BusEvents: React.FC = () => {
       let endDate: Date | undefined;
 
       if (dateFilter === "custom") {
-        if (customStartDate) startDate = new Date(customStartDate);
-        if (customEndDate) endDate = new Date(customEndDate);
+        if (customStartDate) startDate = new Date(customStartDate + 'T00:00:00.000Z');
+        if (customEndDate) endDate = new Date(customEndDate + 'T23:59:59.999Z');
       } else {
         const range = getDateRange(dateFilter); // <-- no title-casing
         startDate = range.startDate;
@@ -273,10 +287,10 @@ const BusEvents: React.FC = () => {
               onFocus={() => setShowSuggestions(true)}
               className="border px-3 py-2 rounded shadow-sm w-full dark:bg-gray-900 dark:border-gray-700 dark:text-white"
             />
-            {showSuggestions && searchTerm && (
+            {showSuggestions && (
               <ul className="absolute z-10 mt-1 w-full bg-white dark:bg-gray-900 border dark:border-gray-700 rounded shadow max-h-60 overflow-auto">
                 {busSuggestions
-                  .filter(bus => bus.toLowerCase().includes(searchTerm.toLowerCase()))
+                  .filter(bus => !searchTerm || bus.toLowerCase().includes(searchTerm.toLowerCase()))
                   .map((bus, index) => (
                     <li
                       key={index}
