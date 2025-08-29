@@ -382,20 +382,8 @@ const Dashboard: React.FC = () => {
 
         // Note: We're now using validFuelData directly instead of the complex merging logic
 
-<<<<<<< HEAD
-        // Use the processed fuel data directly
-        const finalized = markFuelEvents(validFuelData, { infer: true, treatDropAsTheft: true });
-        
-        console.log("Finalized fuel data:", finalized);
-        console.log("Event breakdown:", finalized.reduce((acc, reading) => {
-          const eventType = (reading as any).eventType || "NORMAL";
-          acc[eventType] = (acc[eventType] || 0) + 1;
-          return acc;
-        }, {} as Record<string, number>));
-=======
         // Apply final processing with markFuelEvents
         const finalized = markFuelEvents(allDataPoints, { infer: false, treatDropAsTheft: true });
->>>>>>> c53db9d
         
         setFuelData(finalized);
         setEvents(alerts);
