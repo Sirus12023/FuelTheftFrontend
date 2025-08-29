@@ -35,10 +35,24 @@ export function markFuelEvents(
   return sorted.map((row, i, arr) => {
     const id = row.id ?? `${new Date(row.timestamp as any).getTime() || i}-${i}`;
 
-    let event = normalizeEvent((row.eventType as string) ?? (row.type as string));
+    // Check if eventType is already set (from Dashboard processing)
+    let event = (row.eventType as string) || (row.type as string);
+    
+    // Only apply normalization if no eventType was set
+    if (!event) {
+      event = "NORMAL";
+    } else {
+      // Normalize the event type
+      const upper = String(event).toUpperCase();
+      event = (upper === "REFUEL" || upper === "THEFT" || upper === "DROP"
+        ? upper
+        : "NORMAL") as EventType;
+    }
+    
     const fuelChange = typeof row.fuelChange === "number" ? row.fuelChange : undefined;
 
-    if (infer && event === "NORMAL") {
+    // Only apply inference if no eventType was set and infer is enabled
+    if (infer && event === "NORMAL" && !row.eventType) {
       if (typeof fuelChange === "number" && Math.abs(fuelChange) > EPS) {
         event = fuelChange > 0 ? "REFUEL" : "THEFT";
       } else if (i > 0 && typeof row.fuelLevel === "number") {

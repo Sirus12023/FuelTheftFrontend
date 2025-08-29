@@ -12,13 +12,15 @@ import {
 import { format } from "date-fns";
 import type { FuelReading } from "../types/fuel";
 
-type EventType = "REFUEL" | "THEFT" | "DROP" | "NORMAL";
+type EventType = "REFUEL" | "THEFT" | "NORMAL" | "SENSOR_OFFLINE";
 
 interface FuelChartProps {
   fuelData: FuelReading[];
   busId: string;
   /** Use backend summary when available */
   theftTotalOverride?: number;
+  /** Sensor status to determine if sensor is offline */
+  sensorStatus?: "normal" | "alert" | "offline";
 }
 
 interface ParsedDataPoint {
@@ -30,44 +32,65 @@ interface ParsedDataPoint {
   originalTimestamp?: string; // Keep original timestamp for reference
 }
 
-// normalize to our 4 event values
+// normalize to our event values
 const normalizeEvent = (rawType?: string): EventType => {
   const upper = rawType?.toUpperCase();
-  return (["REFUEL", "THEFT", "DROP"].includes(upper || "")
+  return (["REFUEL", "THEFT"].includes(upper || "")
     ? upper
     : "NORMAL") as EventType;
 };
 
-// Include DROP as theft-equivalent per API docs
-const THEFT_EVENTS = new Set<EventType>(["THEFT", "DROP"]);
+// Theft events
+const THEFT_EVENTS = new Set<EventType>(["THEFT"]);
 // const THEFT_EVENTS = new Set<EventType>(["THEFT", "DROP"]);
 
 const EPS = 0.2;
 
 /** Dot renderer (no nulls to satisfy Recharts typing) */
-const DotRenderer: React.FC<any> = ({ cx, cy, payload }) => {
+const DotRenderer: React.FC<any> = ({ cx, cy, payload, sensorStatus }) => {
   if (!payload) return <g />;
   const event: EventType = payload.event ?? "NORMAL";
+  
+  // If sensor is offline, make all dots gray
+  if (sensorStatus === "offline") {
+    return <circle cx={cx} cy={cy} r={4} fill="#6b7280" stroke="#fff" strokeWidth={1} />;
+  }
+  
+  // Otherwise show original colors
   const fill =
     event === "THEFT"
       ? "#ef4444"
       : event === "REFUEL"
       ? "#10b981"
-      : event === "DROP"
-      ? "#f59e0b"
       : "#3b82f6";
   return <circle cx={cx} cy={cy} r={4} fill={fill} stroke="#fff" strokeWidth={1} />;
 };
 
 /** Active (hover) dot renderer */
-const ActiveDotRenderer: React.FC<any> = ({ cx, cy }) => {
-  return <circle cx={cx} cy={cy} r={6} fill="#3b82f6" stroke="#000" strokeWidth={1} />;
+const ActiveDotRenderer: React.FC<any> = ({ cx, cy, payload, sensorStatus }) => {
+  if (!payload) return <g />;
+  const event: EventType = payload.event ?? "NORMAL";
+  
+  // If sensor is offline, make all dots gray
+  if (sensorStatus === "offline") {
+    return <circle cx={cx} cy={cy} r={6} fill="#6b7280" stroke="#000" strokeWidth={1} />;
+  }
+  
+  // Otherwise show original colors
+  const fill =
+    event === "THEFT"
+      ? "#ef4444"
+      : event === "REFUEL"
+      ? "#10b981"
+      : "#3b82f6";
+  return <circle cx={cx} cy={cy} r={6} fill={fill} stroke="#000" strokeWidth={1} />;
 };
 
 const FuelChart: React.FC<FuelChartProps> = ({
   fuelData,
   busId,
   theftTotalOverride,
+  sensorStatus,
 }) => {
   const [isDark, setIsDark] = React.useState(false);
   React.useEffect(() => {
@@ -85,7 +108,7 @@ const FuelChart: React.FC<FuelChartProps> = ({
         new Date(a.timestamp as any).getTime() - new Date(b.timestamp as any).getTime()
       );
   
-    const parsed: ParsedDataPoint[] = sorted
+    let parsed: ParsedDataPoint[] = sorted
       .map((d) => {
         const t = new Date(d.timestamp as any).getTime();
         const ev = normalizeEvent((d as any).eventType || (d as any).type);
@@ -106,6 +129,8 @@ const FuelChart: React.FC<FuelChartProps> = ({
       })
       // NEW: drop bad points so Recharts doesn't render an empty chart
       .filter(p => Number.isFinite(p.fuelLevel));
+    
+
     
     // If there are no events but we have at least one point, ensure the chart still plots a line
     // by ensuring event defaults to NORMAL (already done in normalize) and keeping points.
@@ -130,7 +155,7 @@ const FuelChart: React.FC<FuelChartProps> = ({
     }
   
     return { parsedData: parsed, computedTheft: theft, fromStr, toStr };
-  }, [fuelData]);
+  }, [fuelData, sensorStatus]);
   
 
   const totalTheft =
@@ -212,7 +237,12 @@ const FuelChart: React.FC<FuelChartProps> = ({
                 | number
                 | undefined;
 
-              if (event !== "NORMAL") {
+              if (event === "SENSOR_OFFLINE") {
+                return [
+                  `${value} L`,
+                  `Sensor Offline: ${description || "No recent data"}`,
+                ];
+              } else if (event !== "NORMAL") {
                 const eventLabel =
                   event.charAt(0) + event.slice(1).toLowerCase();
                 const changeStr =
@@ -244,8 +274,8 @@ const FuelChart: React.FC<FuelChartProps> = ({
             stroke="#3b82f6"
             strokeWidth={2}
             // supply elements (not functions) to satisfy types; never return null
-            dot={<DotRenderer />}
-            activeDot={<ActiveDotRenderer />}
+            dot={(props) => <DotRenderer {...props} sensorStatus={sensorStatus} />}
+            activeDot={(props) => <ActiveDotRenderer {...props} sensorStatus={sensorStatus} />}
           />
         </LineChart>
       </ResponsiveContainer>
@@ -265,9 +295,11 @@ const FuelChart: React.FC<FuelChartProps> = ({
           />
           Refuel
         </div>
+
         <div className="flex items-center gap-2">
           <div
             className="w-3 h-3 rounded-sm"
+<<<<<<< HEAD
             style={{ backgroundColor: "#6b7280" }}
           />
           Sensor Health
@@ -276,15 +308,18 @@ const FuelChart: React.FC<FuelChartProps> = ({
           <div
             className="w-3 h-3 rounded-sm"
             style={{ backgroundColor: "#f59e0b" }}
+=======
+            style={{ backgroundColor: "#3b82f6" }}
+>>>>>>> c53db9d
           />
-          Drop
+          Normal
         </div>
         <div className="flex items-center gap-2">
           <div
             className="w-3 h-3 rounded-sm"
-            style={{ backgroundColor: "#3b82f6" }}
+            style={{ backgroundColor: "#6b7280" }}
           />
-          Normal
+          Sensor Offline
         </div>
       </div>
     </section>
